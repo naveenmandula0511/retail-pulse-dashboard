@@ -425,18 +425,7 @@ export default function DashboardPage() {
                                     <CategoryDistributionChart inventory={localInventory} />
                                 </div>
                                 <div className="lg:col-span-2">
-                                    <Card className="border-none shadow-2xl shadow-slate-200/50 rounded-3xl overflow-hidden h-full bg-white">
-                                        <CardHeader className="bg-white border-b border-slate-50 p-8 flex flex-row items-center justify-between">
-                                            <div>
-                                                <CardTitle className="text-2xl font-black italic">Conversion Efficiency</CardTitle>
-                                                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Lifecycle Tracking</p>
-                                            </div>
-                                            <TrendingUp className="w-6 h-6 text-indigo-500" />
-                                        </CardHeader>
-                                        <CardContent className="p-8">
-                                            <RevenueChart />
-                                        </CardContent>
-                                    </Card>
+                                    <ConversionFunnel data={localSales} />
                                 </div>
                             </div>
 
@@ -772,7 +761,7 @@ function CategoryDistributionChart({ inventory }: { inventory: InventoryItem[] }
 
     return (
         <Card className="border-none shadow-xl shadow-slate-200/50 rounded-3xl overflow-hidden h-full bg-white p-8">
-            <CardTitle className="text-xl font-black italic mb-6">Category Distribution</CardTitle>
+            <CardTitle className="text-xl font-black italic mb-6 text-slate-900">Category Distribution</CardTitle>
             <div className="space-y-6">
                 {categories.map((cat) => (
                     <div key={cat.name} className="space-y-2">
@@ -814,7 +803,7 @@ function FunnelStep({ label, value, sub, color, width }: { label: string, value:
 function ConversionFunnel({ data }: { data: SaleRecord[] }) {
     return (
         <Card className="border-none shadow-xl shadow-slate-200/50 rounded-3xl overflow-hidden h-full bg-white p-8">
-            <CardTitle className="text-xl font-black italic mb-8 text-center">Conversion Funnel</CardTitle>
+            <CardTitle className="text-xl font-black italic mb-8 text-center text-slate-900">Conversion Efficiency</CardTitle>
             <div className="space-y-12 max-w-md mx-auto">
                 <FunnelStep label="Reach" value="1.2M" sub="Total Impressions" color="bg-slate-900" width="100%" />
                 <FunnelStep label="Intent" value="450k" sub="Product Views" color="bg-indigo-600" width="80%" />
