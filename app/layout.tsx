@@ -10,6 +10,8 @@ export const metadata: Metadata = {
     description: "High-fidelity retail analytics dashboard",
 };
 
+import { SpeedInsights } from "@vercel/speed-insights/next";
+
 export default function RootLayout({
     children,
 }: Readonly<{
@@ -19,6 +21,7 @@ export default function RootLayout({
         <html lang="en" className="dark">
             <body className={cn(inter.className, "bg-slate-950 text-slate-50 min-h-screen")}>
                 {children}
+                <SpeedInsights />
             </body>
         </html>
     );

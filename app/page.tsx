@@ -1,4 +1,6 @@
-import React from "react"
+"use client"
+
+import React, { useState, useEffect } from "react"
 import {
     Activity,
     LayoutDashboard,
@@ -33,6 +35,24 @@ import { salesData, inventoryData, regionData, type RegionData, type InventoryIt
 import { cn } from "@/lib/utils"
 
 export default function DashboardPage() {
+    // State Management
+    const [activeTab, setActiveTab] = useState('Overview');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [notifications, setNotifications] = useState(3);
+    const [toast, setToast] = useState<{ message: string, type: 'info' | 'success' } | null>(null);
+
+    // Toast Timer
+    useEffect(() => {
+        if (toast) {
+            const timer = setTimeout(() => setToast(null), 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [toast]);
+
+    const showActionToast = (message: string) => {
+        setToast({ message, type: 'info' });
+    };
+
     // Calculate Metrics
     const totalRevenue = salesData.reduce((acc: number, curr: SaleRecord) => acc + curr.revenue, 0);
     const activeStores = regionData.length;
@@ -55,14 +75,37 @@ export default function DashboardPage() {
                 </div>
 
                 <nav className="flex-1 px-4 py-4 space-y-1">
-                    <NavItem icon={<LayoutDashboard />} label="Overview" active />
-                    <NavItem icon={<Map />} label="Inventory Map" />
-                    <NavItem icon={<TrendingUp />} label="Smart Forecast" />
-                    <NavItem icon={<Settings />} label="Settings" />
+                    <NavItem
+                        icon={<LayoutDashboard />}
+                        label="Overview"
+                        active={activeTab === 'Overview'}
+                        onClick={() => setActiveTab('Overview')}
+                    />
+                    <NavItem
+                        icon={<Map />}
+                        label="Inventory Map"
+                        active={activeTab === 'Inventory Map'}
+                        onClick={() => setActiveTab('Inventory Map')}
+                    />
+                    <NavItem
+                        icon={<TrendingUp />}
+                        label="Smart Forecast"
+                        active={activeTab === 'Smart Forecast'}
+                        onClick={() => setActiveTab('Smart Forecast')}
+                    />
+                    <NavItem
+                        icon={<Settings />}
+                        label="Settings"
+                        active={activeTab === 'Settings'}
+                        onClick={() => setActiveTab('Settings')}
+                    />
                 </nav>
 
                 <div className="p-6 border-t border-white/10">
-                    <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => showActionToast("Opening Profile Management...")}
+                        className="flex items-center gap-3 w-full hover:bg-white/5 p-2 rounded-xl transition-colors text-left"
+                    >
                         <Avatar className="h-8 w-8">
                             <AvatarImage src="https://github.com/shadcn.png" />
                             <AvatarFallback>AD</AvatarFallback>
@@ -71,7 +114,7 @@ export default function DashboardPage() {
                             <p className="text-sm font-medium truncate">Admin User</p>
                             <p className="text-xs text-slate-400 truncate">Premium Plan</p>
                         </div>
-                    </div>
+                    </button>
                 </div>
             </aside>
 
@@ -79,20 +122,44 @@ export default function DashboardPage() {
             <main className="flex-1 flex flex-col h-full overflow-hidden">
                 {/* Top Bar */}
                 <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0">
-                    <div className="relative w-96">
+                    <form
+                        onSubmit={(e: React.FormEvent) => {
+                            e.preventDefault();
+                            if (searchQuery) showActionToast(`Searching for "${searchQuery}"...`);
+                        }}
+                        className="relative w-96"
+                    >
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                         <input
                             type="text"
+                            value={searchQuery}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
                             placeholder="Search data, metrics, reports..."
-                            className="w-full bg-slate-100 border-none rounded-full pl-10 pr-4 py-2 text-sm focus:ring-2 focus:ring-indigo-500/20"
+                            className="w-full bg-slate-100 border-none rounded-full pl-10 pr-4 py-2 text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500/20"
                         />
-                    </div>
+                    </form>
 
                     <div className="flex items-center gap-4">
-                        <Button variant="ghost" size="icon" className="text-slate-500">
-                            <Bell className="w-5 h-5" />
-                        </Button>
-                        <Avatar className="h-9 w-9 border border-slate-200 cursor-pointer">
+                        <div className="relative">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-slate-500"
+                                onClick={() => {
+                                    setNotifications(0);
+                                    showActionToast("Opening Notifications...");
+                                }}
+                            >
+                                <Bell className="w-5 h-5" />
+                                {notifications > 0 && (
+                                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white" />
+                                )}
+                            </Button>
+                        </div>
+                        <Avatar
+                            className="h-9 w-9 border border-slate-200 cursor-pointer hover:ring-2 hover:ring-indigo-500/20 transition-all"
+                            onClick={() => showActionToast("User Avatar clicked - Opening Menu...")}
+                        >
                             <AvatarImage src="https://github.com/shadcn.png" />
                             <AvatarFallback>CN</AvatarFallback>
                         </Avatar>
@@ -102,8 +169,16 @@ export default function DashboardPage() {
                 {/* Dashboard Content */}
                 <div className="flex-1 overflow-y-auto p-8 space-y-8">
                     <div>
-                        <h2 className="text-3xl font-bold tracking-tight text-slate-900 font-mono">Command Center</h2>
-                        <p className="text-slate-500 mt-1">Operational status and inventory intelligence dashboard.</p>
+                        <h2 className="text-3xl font-bold tracking-tight text-slate-900 font-mono">
+                            {activeTab === 'Overview' ? 'Command Center' :
+                                activeTab === 'Inventory Map' ? 'Regional Intelligence' :
+                                    activeTab === 'Smart Forecast' ? 'Predictive Analytics' : 'System Settings'}
+                        </h2>
+                        <p className="text-slate-500 mt-1">
+                            {activeTab === 'Overview' ? 'Operational status and inventory intelligence dashboard.' :
+                                activeTab === 'Inventory Map' ? 'Geospatial distribution and regional performance metrics.' :
+                                    activeTab === 'Smart Forecast' ? 'AI-powered demand projections and risk assessment.' : 'Configure your pulse preferences and system parameters.'}
+                        </p>
                     </div>
 
                     {/* KPI Cards Grid */}
@@ -167,7 +242,11 @@ export default function DashboardPage() {
 
                         {/* Extraordinary Feature: AI Smart Insights Hub */}
                         <div className="lg:col-span-1">
-                            <SmartInsightHub inventory={inventoryData} sales={salesData} />
+                            <SmartInsightHub
+                                inventory={inventoryData}
+                                sales={salesData}
+                                onAction={showActionToast}
+                            />
                         </div>
                     </div>
 
@@ -181,7 +260,14 @@ export default function DashboardPage() {
                                         <CardTitle className="text-lg font-bold text-slate-900">Inventory Intelligence</CardTitle>
                                         <p className="text-sm text-slate-500">Real-time stock status across top SKUs</p>
                                     </div>
-                                    <Button variant="ghost" size="sm" className="text-indigo-600 font-bold">Full Report</Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-indigo-600 font-bold"
+                                        onClick={() => showActionToast("Generating Full Inventory Report...")}
+                                    >
+                                        Full Report
+                                    </Button>
                                 </CardHeader>
                                 <CardContent className="p-0">
                                     <div className="overflow-x-auto">
@@ -253,18 +339,37 @@ export default function DashboardPage() {
                                     <Map className="w-5 h-5 text-slate-400" />
                                 </CardHeader>
                                 <CardContent className="pt-6 relative">
-                                    <InventoryMap regions={regionData} />
+                                    <InventoryMap
+                                        regions={regionData}
+                                        onAction={showActionToast}
+                                    />
                                 </CardContent>
                             </Card>
                         </div>
                     </div>
                 </div>
             </main>
+
+            {/* Global Interaction Toast */}
+            {toast && (
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    <div className="bg-slate-900 text-white px-6 py-3 rounded-2xl shadow-2xl border border-white/10 flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                        <span className="text-sm font-bold tracking-tight">{toast.message}</span>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
 
-function InventoryMap({ regions }: { regions: RegionData[] }) {
+function InventoryMap({
+    regions,
+    onAction
+}: {
+    regions: RegionData[],
+    onAction: (msg: string) => void
+}) {
     const width = 400
     const height = 300
 
@@ -294,7 +399,11 @@ function InventoryMap({ regions }: { regions: RegionData[] }) {
                     const radius = 10 + (region.revenue / maxRev) * 20
 
                     return (
-                        <g key={i} className="cursor-pointer group/node">
+                        <g
+                            key={i}
+                            className="cursor-pointer group/node"
+                            onClick={() => onAction(`Analyzing ${region.region} region performance...`)}
+                        >
                             <circle
                                 cx={x}
                                 cy={y}
@@ -344,6 +453,7 @@ function InventoryMap({ regions }: { regions: RegionData[] }) {
 }
 
 function PerformanceChart({ data }: { data: SaleRecord[] }) {
+    const [hoverIndex, setHoverIndex] = useState<number | null>(null)
     const height = 320
     const width = 1000
     const padding = 50
@@ -367,9 +477,28 @@ function PerformanceChart({ data }: { data: SaleRecord[] }) {
     // Create a smooth area under the revenue line
     const revenueAreaPoints = `${revenuePoints} ${padding + chartWidth},${height - padding} ${padding},${height - padding}`
 
+    const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+        const svg = e.currentTarget
+        const rect = svg.getBoundingClientRect()
+        const x = e.clientX - rect.left
+        const ratio = (x - padding) / chartWidth
+        const index = Math.round(ratio * (data.length - 1))
+
+        if (index >= 0 && index < data.length) {
+            setHoverIndex(index)
+        } else {
+            setHoverIndex(null)
+        }
+    }
+
     return (
         <div className="w-full relative group/chart">
-            <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible select-none">
+            <svg
+                viewBox={`0 0 ${width} ${height}`}
+                className="w-full h-auto overflow-visible select-none"
+                onMouseMove={handleMouseMove}
+                onMouseLeave={() => setHoverIndex(null)}
+            >
                 {/* Horizontal Grid lines */}
                 {[0, 0.25, 0.5, 0.75, 1].map((p, i) => (
                     <g key={i}>
@@ -440,31 +569,80 @@ function PerformanceChart({ data }: { data: SaleRecord[] }) {
                     className="opacity-80"
                 />
 
-                {/* Interaction Points (Last Data Point) */}
-                <g className="animate-pulse">
-                    <circle
-                        cx={padding + chartWidth}
-                        cy={height - padding - (data[data.length - 1].revenue / maxRevenue) * chartHeight}
-                        r="5"
-                        fill="#6366f1"
-                        stroke="white"
-                        strokeWidth="2"
-                    />
-                    <circle
-                        cx={padding + chartWidth}
-                        cy={height - padding - (data[data.length - 1].profit / maxRevenue) * chartHeight}
-                        r="5"
-                        fill="#10b981"
-                        stroke="white"
-                        strokeWidth="2"
-                    />
-                </g>
+                {/* Interaction Overlay */}
+                {hoverIndex !== null && (
+                    <g>
+                        <line
+                            x1={padding + (hoverIndex / (data.length - 1)) * chartWidth}
+                            y1={padding}
+                            x2={padding + (hoverIndex / (data.length - 1)) * chartWidth}
+                            y2={height - padding}
+                            stroke="#6366f1"
+                            strokeWidth="2"
+                            strokeDasharray="4 4"
+                        />
+                        <circle
+                            cx={padding + (hoverIndex / (data.length - 1)) * chartWidth}
+                            cy={height - padding - (data[hoverIndex].revenue / maxRevenue) * chartHeight}
+                            r="6"
+                            fill="#6366f1"
+                            stroke="white"
+                            strokeWidth="3"
+                        />
+                        <circle
+                            cx={padding + (hoverIndex / (data.length - 1)) * chartWidth}
+                            cy={height - padding - (data[hoverIndex].profit / maxRevenue) * chartHeight}
+                            r="6"
+                            fill="#10b981"
+                            stroke="white"
+                            strokeWidth="3"
+                        />
+
+                        {/* Tooltip Box */}
+                        <g transform={`translate(${padding + (hoverIndex / (data.length - 1)) * chartWidth + (hoverIndex > data.length / 2 ? -160 : 20)}, ${height / 2 - 40})`}>
+                            <rect width="140" height="80" rx="12" className="fill-slate-900 shadow-2xl" />
+                            <text x="15" y="25" className="fill-slate-400 text-[10px] font-bold uppercase tracking-wider">{data[hoverIndex].date}</text>
+                            <text x="15" y="45" className="fill-white text-xs font-bold">Rev: ${(data[hoverIndex].revenue / 1000).toFixed(1)}k</text>
+                            <text x="15" y="65" className="fill-emerald-400 text-xs font-bold">Profit: ${(data[hoverIndex].profit / 1000).toFixed(1)}k</text>
+                        </g>
+                    </g>
+                )}
+
+                {/* Last Data Point Indicators (Static if not hovering) */}
+                {hoverIndex === null && (
+                    <g className="animate-pulse">
+                        <circle
+                            cx={padding + chartWidth}
+                            cy={height - padding - (data[data.length - 1].revenue / maxRevenue) * chartHeight}
+                            r="5"
+                            fill="#6366f1"
+                            stroke="white"
+                            strokeWidth="2"
+                        />
+                        <circle
+                            cx={padding + chartWidth}
+                            cy={height - padding - (data[data.length - 1].profit / maxRevenue) * chartHeight}
+                            r="5"
+                            fill="#10b981"
+                            stroke="white"
+                            strokeWidth="2"
+                        />
+                    </g>
+                )}
             </svg>
         </div>
     )
 }
 
-function SmartInsightHub({ inventory, sales }: { inventory: InventoryItem[], sales: SaleRecord[] }) {
+function SmartInsightHub({
+    inventory,
+    sales,
+    onAction
+}: {
+    inventory: InventoryItem[],
+    sales: SaleRecord[],
+    onAction: (msg: string) => void
+}) {
     const criticalItems = inventory.filter(item => item.status === 'Critical')
     const lowStockItems = inventory.filter(item => item.status === 'Low Stock')
 
@@ -537,12 +715,14 @@ function SmartInsightHub({ inventory, sales }: { inventory: InventoryItem[], sal
                     </div>
                 </div>
 
-                {/* AI Interaction Prompts */}
                 <div className="pt-2">
-                    <div className="flex items-center gap-2 p-3 rounded-xl bg-indigo-500/20 border border-indigo-500/50 cursor-text group/prompt hover:bg-indigo-500/30 transition-all">
+                    <button
+                        onClick={() => onAction("Opening Pulse AI Chat...")}
+                        className="w-full flex items-center gap-2 p-3 rounded-xl bg-indigo-500/20 border border-indigo-500/50 cursor-pointer group/prompt hover:bg-indigo-500/30 transition-all text-left"
+                    >
                         <MessageSquare className="w-4 h-4 text-indigo-400" />
                         <span className="text-xs font-semibold text-indigo-300">Ask Pulse AI for a strategy...</span>
-                    </div>
+                    </button>
                 </div>
             </CardContent>
 
@@ -554,18 +734,31 @@ function SmartInsightHub({ inventory, sales }: { inventory: InventoryItem[], sal
     )
 }
 
-function NavItem({ icon, label, active = false }: { icon: React.ReactNode, label: string, active?: boolean }) {
+function NavItem({
+    icon,
+    label,
+    active = false,
+    onClick
+}: {
+    icon: React.ReactNode,
+    label: string,
+    active?: boolean,
+    onClick?: () => void
+}) {
     return (
-        <a
-            href="#"
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${active
-                ? "bg-indigo-500 text-white"
+        <button
+            onClick={(e: React.MouseEvent) => {
+                e.preventDefault();
+                onClick?.();
+            }}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${active
+                ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/20"
                 : "text-slate-400 hover:text-white hover:bg-white/5"
                 }`}
         >
             {React.cloneElement(icon as React.ReactElement, { size: 18 })}
             {label}
-        </a>
+        </button>
     )
 }
 
