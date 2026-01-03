@@ -26,7 +26,14 @@ import {
     Download,
     MapPin,
     Plus,
-    Trash2
+    Trash2,
+    Users,
+    CreditCard,
+    FileText,
+    Clock,
+    Coins,
+    Percent,
+    Store
 } from "lucide-react"
 import {
     ComposableMap,
@@ -70,6 +77,21 @@ export default function DashboardPage() {
     const [notificationStatus, setNotificationStatus] = useState<'default' | 'granted' | 'denied' | 'unsupported'>('default');
     const [isSaving, setIsSaving] = useState(false);
     const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+    const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+
+    // Store Configuration State
+    const [storeName, setStoreName] = useState("RetailPulse Electronics - Flagship");
+    const [currency, setCurrency] = useState("USD");
+    const [taxRate, setTaxRate] = useState(8.5);
+    const [operatingHours, setOperatingHours] = useState("09:00 - 21:00");
+
+    // Team State
+    const [teamMembers, setTeamMembers] = useState([
+        { id: 1, name: "Naveen M.", role: "Admin", email: "admin@retailpulse.ai", avatar: "NM" },
+        { id: 2, name: "Sarah J.", role: "Store Manager", email: "sarah@retailpulse.ai", avatar: "SJ" },
+        { id: 3, name: "Mike R.", role: "Sales Assoc", email: "mike@retailpulse.ai", avatar: "MR" }
+    ]);
 
     // Theme Persistence Effect
     useEffect(() => {
@@ -79,7 +101,7 @@ export default function DashboardPage() {
             document.body.classList.add('dark-theme');
         } else if (savedTheme === 'light') {
             document.body.classList.remove('dark-theme');
-        } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        } else if (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches) {
             setDarkMode(true);
             document.body.classList.add('dark-theme');
         }
@@ -109,7 +131,7 @@ export default function DashboardPage() {
         const permission = await Notification.requestPermission();
         setNotificationStatus(permission);
         if (permission === 'granted') {
-            showActionToast('Alerts enabled for critical inventory levels.');
+            showActionToast('Stock alerts enabled.');
         } else {
             showActionToast('Notifications currently restricted.');
         }
@@ -118,8 +140,12 @@ export default function DashboardPage() {
     // Save Changes Handler
     const handleSaveChanges = async () => {
         setIsSaving(true);
-        // Simulate network latency
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Simulate collecting state
+        const config = { storeName, currency, taxRate, operatingHours, darkMode };
+        console.log("Saving Store Config:", config);
+
+        // Simulate network latency (1.5s as requested)
+        await new Promise(resolve => setTimeout(resolve, 1500));
         setIsSaving(false);
         setToast({ message: 'Settings Updated Successfully', type: 'success' });
     };
@@ -598,98 +624,334 @@ export default function DashboardPage() {
                     )}
 
                     {activeTab === 'Settings' && (
-                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <div className="flex items-center justify-between mb-4">
+                        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+                            {/* Header Section */}
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-4">
                                 <div>
-                                    <h3 className="text-2xl font-bold text-slate-900">System Preferences</h3>
-                                    <p className="text-slate-500">Configure your dashboard environment and security</p>
+                                    <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+                                        <Settings className="w-8 h-8 text-indigo-600" />
+                                        Store Administration
+                                    </h3>
+                                    <p className="text-slate-500 font-medium mt-1">Global control panel for RetailPulse flagship operations</p>
                                 </div>
                                 <Button
                                     onClick={handleSaveChanges}
                                     disabled={isSaving}
-                                    className="bg-slate-900 text-white font-bold rounded-xl px-6 min-w-[140px]"
+                                    className="bg-slate-900 text-white font-extrabold rounded-2xl h-14 px-10 min-w-[180px] shadow-2xl shadow-indigo-100 transition-all active:scale-95"
                                 >
                                     {isSaving ? (
                                         <>
-                                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                                            Saving...
+                                            <Loader2 className="w-5 h-5 animate-spin mr-3" />
+                                            Saving Config...
                                         </>
                                     ) : 'Save Changes'}
                                 </Button>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                <Card className="border-slate-200 shadow-sm rounded-3xl overflow-hidden">
-                                    <CardHeader className="bg-slate-50 border-b border-slate-100 p-6">
-                                        <CardTitle className="text-lg font-bold flex items-center gap-2">
-                                            <Zap className="w-5 h-5 text-indigo-500" />
-                                            Interface Options
+
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                {/* Interface & Security Row */}
+                                <Card className="border-slate-200 shadow-xl rounded-[2.5rem] overflow-hidden bg-white/50 backdrop-blur-xl border-white/40">
+                                    <CardHeader className="bg-slate-50/80 border-b border-slate-100 p-8">
+                                        <CardTitle className="text-xl font-bold flex items-center gap-3 text-slate-800">
+                                            <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center">
+                                                <Zap className="w-5 h-5 text-indigo-600" />
+                                            </div>
+                                            Interface & Visuals
                                         </CardTitle>
                                     </CardHeader>
-                                    <CardContent className="p-8 space-y-6">
-                                        <div className="flex items-center justify-between">
+                                    <CardContent className="p-8 space-y-8">
+                                        <div className="flex items-center justify-between group">
                                             <div>
-                                                <p className="font-bold text-slate-900">Dark Mode (Experimental)</p>
-                                                <p className="text-sm text-slate-500">Enable high-performance dark theme</p>
+                                                <p className="font-extrabold text-slate-900">Dark Mode (High-Performance)</p>
+                                                <p className="text-sm text-slate-500 font-medium">Invert environment for terminal-style clarity</p>
                                             </div>
                                             <div
                                                 onClick={toggleDarkMode}
                                                 className={cn(
-                                                    "w-14 h-7 rounded-full relative p-1 cursor-pointer transition-colors duration-300",
-                                                    darkMode ? "bg-indigo-600" : "bg-slate-200"
+                                                    "w-16 h-8 rounded-full relative p-1.5 cursor-pointer transition-all duration-500 shadow-inner",
+                                                    darkMode ? "bg-indigo-600 ring-4 ring-indigo-50" : "bg-slate-200"
                                                 )}
                                             >
                                                 <div className={cn(
-                                                    "w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-300",
-                                                    darkMode ? "translate-x-7" : "translate-x-0"
+                                                    "w-5 h-5 bg-white rounded-full shadow-lg transition-transform duration-500",
+                                                    darkMode ? "translate-x-8" : "translate-x-0"
                                                 )} />
                                             </div>
                                         </div>
-                                        <div className="flex items-center justify-between">
+                                        <div className="flex items-center justify-between group">
                                             <div>
-                                                <p className="font-bold text-slate-900">Push Notifications</p>
-                                                <p className="text-sm text-slate-500">Browser alerts for critical stockouts</p>
+                                                <p className="font-extrabold text-slate-900">Business Alerts</p>
+                                                <p className="text-sm text-slate-500 font-medium">Real-time browser notifications for stockouts</p>
                                             </div>
                                             <div
                                                 onClick={handleNotificationToggle}
                                                 className={cn(
-                                                    "w-14 h-7 rounded-full relative p-1 cursor-pointer transition-colors duration-300",
-                                                    notificationStatus === 'granted' ? "bg-indigo-600" : "bg-slate-200"
+                                                    "w-16 h-8 rounded-full relative p-1.5 cursor-pointer transition-all duration-500 shadow-inner",
+                                                    notificationStatus === 'granted' ? "bg-indigo-600 ring-4 ring-indigo-50" : "bg-slate-200"
                                                 )}
                                             >
                                                 <div className={cn(
-                                                    "w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-300",
-                                                    notificationStatus === 'granted' ? "translate-x-7" : "translate-x-0"
+                                                    "w-5 h-5 bg-white rounded-full shadow-lg transition-transform duration-500",
+                                                    notificationStatus === 'granted' ? "translate-x-8" : "translate-x-0"
                                                 )} />
                                             </div>
                                         </div>
                                     </CardContent>
                                 </Card>
-                                <Card className="border-slate-200 shadow-sm rounded-3xl overflow-hidden">
-                                    <CardHeader className="bg-slate-50 border-b border-slate-100 p-6">
-                                        <CardTitle className="text-lg font-bold flex items-center gap-2">
-                                            <Zap className="w-5 h-5 text-indigo-500" />
-                                            Security & Verification
+
+                                <Card className="border-slate-200 shadow-xl rounded-[2.5rem] overflow-hidden bg-white/50 backdrop-blur-xl border-white/40">
+                                    <CardHeader className="bg-slate-50/80 border-b border-slate-100 p-8">
+                                        <CardTitle className="text-xl font-bold flex items-center gap-3 text-slate-800">
+                                            <div className="w-10 h-10 bg-rose-50 rounded-2xl flex items-center justify-center">
+                                                <BrainCircuit className="w-5 h-5 text-rose-600" />
+                                            </div>
+                                            Security & Access
                                         </CardTitle>
                                     </CardHeader>
                                     <CardContent className="p-8 space-y-6">
                                         <Button
                                             variant="outline"
                                             onClick={() => setIsSecurityModalOpen(true)}
-                                            className="w-full justify-start h-14 rounded-2xl border-slate-200 hover:bg-slate-50 transition-colors font-bold text-slate-700"
+                                            className="w-full justify-between h-16 rounded-2xl border-slate-200 hover:bg-slate-50 hover:border-indigo-200 px-6 transition-all font-bold text-slate-700"
                                         >
-                                            <ArrowUpRight className="w-4 h-4 mr-3 text-indigo-500" />
-                                            Two-Factor Authentication (2FA)
+                                            <div className="flex items-center gap-4">
+                                                <Radio className="w-5 h-5 text-indigo-500" />
+                                                Two-Factor Authentication (2FA)
+                                            </div>
+                                            <Badge className="bg-emerald-50 text-emerald-600 border-none font-extrabold uppercase text-[10px]">Active</Badge>
                                         </Button>
                                         <Button
                                             variant="outline"
                                             onClick={() => setIsSecurityModalOpen(true)}
-                                            className="w-full justify-start h-14 rounded-2xl border-slate-200 hover:bg-slate-50 transition-colors font-bold text-slate-700"
+                                            className="w-full justify-between h-16 rounded-2xl border-slate-200 hover:bg-slate-50 hover:border-indigo-200 px-6 transition-all font-bold text-slate-700"
                                         >
-                                            <Bell className="w-4 h-4 mr-3 text-indigo-500" />
-                                            Manage Security Keys
+                                            <div className="flex items-center gap-4">
+                                                <Radio className="w-5 h-5 text-indigo-500" />
+                                                Manage Physical Security Keys
+                                            </div>
+                                            <Badge variant="outline" className="border-slate-200 text-slate-400 font-extrabold uppercase text-[10px]">Configured</Badge>
                                         </Button>
                                     </CardContent>
                                 </Card>
+                            </div>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                {/* Team & Config Row */}
+                                <Card className="border-slate-200 shadow-xl rounded-[2.5rem] overflow-hidden bg-white/50 backdrop-blur-xl border-white/40">
+                                    <CardHeader className="bg-slate-50/80 border-b border-slate-100 p-8 flex flex-row items-center justify-between">
+                                        <CardTitle className="text-xl font-bold flex items-center gap-3 text-slate-800">
+                                            <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center">
+                                                <Users className="w-5 h-5 text-indigo-600" />
+                                            </div>
+                                            Team Management
+                                        </CardTitle>
+                                        <Button onClick={() => setIsInviteModalOpen(true)} className="bg-indigo-600 text-white font-bold rounded-xl px-4 h-10 shadow-lg shadow-indigo-100">
+                                            <Plus className="w-4 h-4 mr-2" />
+                                            Invite Member
+                                        </Button>
+                                    </CardHeader>
+                                    <CardContent className="p-8">
+                                        <div className="space-y-4">
+                                            {teamMembers.map((member) => (
+                                                <div key={member.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-indigo-200 transition-all">
+                                                    <div className="flex items-center gap-4">
+                                                        <Avatar className="h-10 w-10 border-2 border-white shadow-sm font-bold">
+                                                            <AvatarFallback className="bg-indigo-500 text-white text-xs">{member.avatar}</AvatarFallback>
+                                                        </Avatar>
+                                                        <div>
+                                                            <p className="font-bold text-slate-900">{member.name}</p>
+                                                            <p className="text-xs text-slate-500 font-medium">{member.email}</p>
+                                                        </div>
+                                                    </div>
+                                                    <Badge className="bg-white text-slate-600 border-slate-200 font-bold uppercase text-[9px] tracking-widest">{member.role}</Badge>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+
+                                <Card className="border-slate-200 shadow-xl rounded-[2.5rem] overflow-hidden bg-white/50 backdrop-blur-xl border-white/40">
+                                    <CardHeader className="bg-slate-50/80 border-b border-slate-100 p-8">
+                                        <CardTitle className="text-xl font-bold flex items-center gap-3 text-slate-800">
+                                            <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center">
+                                                <Store className="w-5 h-5 text-indigo-600" />
+                                            </div>
+                                            Store Configuration
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="p-8 grid grid-cols-2 gap-6">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Store Instance Name</label>
+                                            <input
+                                                value={storeName}
+                                                onChange={(e) => setStoreName(e.target.value)}
+                                                className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Default Currency</label>
+                                            <select
+                                                value={currency}
+                                                onChange={(e) => setCurrency(e.target.value)}
+                                                className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                            >
+                                                <option value="USD">USD ($)</option>
+                                                <option value="EUR">EUR (€)</option>
+                                                <option value="GBP">GBP (£)</option>
+                                            </select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Global Tax Rate (%)</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="number"
+                                                    value={taxRate}
+                                                    onChange={(e) => setTaxRate(Number(e.target.value))}
+                                                    className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                                />
+                                                <Percent className="w-4 h-4 absolute right-4 top-4 text-slate-400" />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Operating Window</label>
+                                            <div className="relative">
+                                                <input
+                                                    value={operatingHours}
+                                                    onChange={(e) => setOperatingHours(e.target.value)}
+                                                    className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                                />
+                                                <Clock className="w-4 h-4 absolute right-4 top-4 text-slate-400" />
+                                            </div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </div>
+
+                            {/* Billing & Subscription Module */}
+                            <div className="space-y-8 mt-12">
+                                <div className="flex items-center gap-3">
+                                    <h4 className="text-2xl font-extrabold text-slate-900 tracking-tight">Billing & Professional Services</h4>
+                                    <div className="h-px bg-slate-200 flex-1" />
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                    <Card className="md:col-span-2 border-slate-200 shadow-xl rounded-[2.5rem] overflow-hidden bg-white/50 backdrop-blur-xl border-white/40">
+                                        <div className="p-8">
+                                            <div className="flex justify-between items-start mb-8">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-14 h-14 bg-indigo-900 text-white rounded-2xl flex items-center justify-center">
+                                                        <Zap className="w-7 h-7" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-extrabold uppercase tracking-widest text-indigo-500 mb-1">Current Subscription</p>
+                                                        <h5 className="text-2xl font-extrabold text-slate-900">Business Pro Cloud</h5>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-3xl font-black text-slate-900">$79<span className="text-sm font-bold text-slate-400">/mo</span></p>
+                                                    <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Next Bill: Feb 01, 2026</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-6">
+                                                <div className="space-y-2">
+                                                    <div className="flex justify-between text-xs font-bold uppercase tracking-widest">
+                                                        <span className="text-slate-500">API Usage (Real-Time Flux)</span>
+                                                        <span className="text-indigo-600">75% - 75,000 / 100,000 reqs</span>
+                                                    </div>
+                                                    <div className="h-3 bg-slate-100 rounded-full overflow-hidden p-0.5">
+                                                        <div className="h-full bg-indigo-600 rounded-full w-[75%] shadow-lg shadow-indigo-100 animate-pulse" />
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-4 pt-2">
+                                                    <Button className="bg-slate-900 text-white font-extrabold rounded-xl h-12 flex-1 shadow-xl hover:bg-slate-800 transition-all">Upgrade Capacity</Button>
+                                                    <Button variant="ghost" className="text-rose-600 font-bold hover:bg-rose-50 rounded-xl h-12 flex-1">Pause Instance</Button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </Card>
+
+                                    <Card className="border-slate-200 shadow-xl rounded-[2.5rem] overflow-hidden bg-white/50 backdrop-blur-xl border-white/40">
+                                        <CardHeader className="p-8 border-b border-slate-100 bg-slate-50/50">
+                                            <CardTitle className="text-lg font-bold flex items-center gap-2">
+                                                <CreditCard className="w-5 h-5 text-indigo-500" />
+                                                Active Payment
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="p-8 flex flex-col justify-between h-full min-h-[220px]">
+                                            <div className="p-6 bg-slate-950 rounded-2xl relative overflow-hidden group shadow-2xl">
+                                                <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 blur-3xl -mr-12 -mt-12 group-hover:scale-150 transition-transform duration-1000" />
+                                                <div className="flex justify-between items-start mb-6">
+                                                    <div className="w-10 h-10 bg-white/10 rounded-lg" />
+                                                    <Radio className="w-4 h-4 text-emerald-400" />
+                                                </div>
+                                                <p className="text-white font-mono text-lg tracking-[0.2em] mb-4">•••• •••• •••• 4242</p>
+                                                <div className="flex justify-between items-end">
+                                                    <div>
+                                                        <p className="text-[8px] uppercase tracking-widest text-slate-500 font-bold">Expiry</p>
+                                                        <p className="text-white text-xs font-bold">12 / 28</p>
+                                                    </div>
+                                                    <CreditCard className="text-white/20 w-8 h-8" />
+                                                </div>
+                                            </div>
+                                            <Button
+                                                onClick={() => setIsPaymentModalOpen(true)}
+                                                className="w-full mt-6 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-none font-extrabold rounded-xl h-11"
+                                            >
+                                                Update Secure Method
+                                            </Button>
+                                        </CardContent>
+                                    </Card>
+
+                                    <Card className="md:col-span-3 border-slate-200 shadow-xl rounded-[2.5rem] overflow-hidden bg-white/50 backdrop-blur-xl border-white/40">
+                                        <CardHeader className="p-8 border-b border-slate-100 bg-slate-50/50 flex flex-row items-center justify-between">
+                                            <div>
+                                                <CardTitle className="text-xl font-bold flex items-center gap-3">
+                                                    <FileText className="w-6 h-6 text-indigo-600" />
+                                                    Administrative Invoice History
+                                                </CardTitle>
+                                            </div>
+                                            <Badge variant="outline" className="font-bold border-slate-200 uppercase text-[10px] tracking-widest">Q1-2026 Verified</Badge>
+                                        </CardHeader>
+                                        <CardContent className="p-0">
+                                            <table className="w-full">
+                                                <thead>
+                                                    <tr className="bg-slate-50 border-b border-slate-100">
+                                                        <th className="text-left px-8 py-4 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Execution Date</th>
+                                                        <th className="text-left px-8 py-4 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Package Amount</th>
+                                                        <th className="text-left px-8 py-4 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Node Status</th>
+                                                        <th className="text-right px-8 py-4 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Terminal Link</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {[
+                                                        { date: "Jan 12, 2026", amount: "$79.00", status: "Paid" },
+                                                        { date: "Dec 12, 2025", amount: "$79.00", status: "Paid" },
+                                                        { date: "Nov 12, 2025", amount: "$79.00", status: "Paid" }
+                                                    ].map((invoice, i) => (
+                                                        <tr key={i} className="hover:bg-indigo-50/30 transition-colors">
+                                                            <td className="px-8 py-5 font-bold text-slate-700">{invoice.date}</td>
+                                                            <td className="px-8 py-5 font-extrabold text-slate-900">{invoice.amount}</td>
+                                                            <td className="px-8 py-5">
+                                                                <Badge className="bg-emerald-50 text-emerald-600 border-none font-extrabold uppercase text-[9px]">Verified: {invoice.status}</Badge>
+                                                            </td>
+                                                            <td className="px-8 py-5 text-right">
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    onClick={() => showActionToast(`Downloading digital invoice: ${invoice.date}.pdf`)}
+                                                                    className="h-9 w-9 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl"
+                                                                >
+                                                                    <Download className="w-4 h-4" />
+                                                                </Button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </CardContent>
+                                    </Card>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -795,6 +1057,138 @@ export default function DashboardPage() {
                                     }}
                                 >
                                     Confirm
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {/* Invite Member Modal */}
+            {isInviteModalOpen && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300 p-4">
+                    <Card className="w-full max-w-md border-none shadow-2xl rounded-3xl overflow-hidden scale-in-center">
+                        <CardHeader className="bg-indigo-600 text-white p-8">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <CardTitle className="text-2xl font-black">Invite Team Member</CardTitle>
+                                    <p className="text-indigo-100 text-xs mt-1 uppercase tracking-widest font-bold">Access Control Level: Manager</p>
+                                </div>
+                                <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
+                                    <Users className="w-6 h-6 text-indigo-100" />
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-8 space-y-6">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Collaborator Email</label>
+                                <input
+                                    type="email"
+                                    placeholder="name@retailpulse.ai"
+                                    className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Designated Role</label>
+                                <select className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20">
+                                    <option>Store Manager</option>
+                                    <option>Sales Associate</option>
+                                    <option>Inventory Specialist</option>
+                                    <option>Financial Auditor</option>
+                                </select>
+                            </div>
+                            <div className="flex gap-3 pt-4">
+                                <Button
+                                    variant="ghost"
+                                    className="flex-1 h-12 rounded-xl font-bold text-slate-500"
+                                    onClick={() => setIsInviteModalOpen(false)}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    className="flex-1 h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-xl shadow-indigo-100"
+                                    onClick={() => {
+                                        setIsInviteModalOpen(false);
+                                        showActionToast("Invitation sent to collaborator inbox.");
+                                    }}
+                                >
+                                    Send Invite
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
+            {/* Payment Update Modal */}
+            {isPaymentModalOpen && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300 p-4">
+                    <Card className="w-full max-w-md border-none shadow-2xl rounded-3xl overflow-hidden scale-in-center">
+                        <CardHeader className="bg-slate-950 text-white p-8">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <CardTitle className="text-2xl font-black">Secure Payment Gateway</CardTitle>
+                                    <p className="text-slate-400 text-xs mt-1 uppercase tracking-widest font-bold">PCI DSS COMPLIANT TERMINAL</p>
+                                </div>
+                                <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
+                                    <Lock className="w-6 h-6 text-indigo-400" />
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-8 space-y-6">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Cardholder Name</label>
+                                <input
+                                    type="text"
+                                    placeholder="ADMIN NAME"
+                                    className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Card Details</label>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        placeholder="4242 4242 4242 4242"
+                                        className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                    />
+                                    <CreditCard className="w-4 h-4 absolute right-4 top-4 text-slate-300" />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Expiry</label>
+                                    <input
+                                        type="text"
+                                        placeholder="MM / YY"
+                                        className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">CVC</label>
+                                    <input
+                                        type="text"
+                                        placeholder="•••"
+                                        className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex gap-3 pt-4">
+                                <Button
+                                    variant="ghost"
+                                    className="flex-1 h-12 rounded-xl font-bold text-slate-500"
+                                    onClick={() => setIsPaymentModalOpen(false)}
+                                >
+                                    Dismiss
+                                </Button>
+                                <Button
+                                    className="flex-1 h-12 rounded-xl bg-slate-950 hover:bg-slate-900 text-white font-bold shadow-xl"
+                                    onClick={() => {
+                                        setIsPaymentModalOpen(false);
+                                        showActionToast("Payment profile updated successfully.");
+                                    }}
+                                >
+                                    Update Billing
                                 </Button>
                             </div>
                         </CardContent>
