@@ -23,8 +23,18 @@ import {
     MessageSquare,
     Radio,
     Loader2,
-    Download
+    Download,
+    MapPin,
+    Plus,
+    Trash2
 } from "lucide-react"
+import {
+    ComposableMap,
+    Geographies,
+    Geography,
+    Marker,
+    Annotation
+} from "react-simple-maps"
 import {
     Card,
     CardContent,
@@ -521,60 +531,7 @@ export default function DashboardPage() {
                     )}
 
                     {!searchQuery && activeTab === 'Inventory Map' && (
-                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <Card className="border-slate-200 shadow-xl overflow-hidden min-h-[500px] flex flex-col">
-                                <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 bg-slate-50/50 p-8">
-                                    <div>
-                                        <CardTitle className="text-2xl font-bold">Regional Distribution Map</CardTitle>
-                                        <p className="text-sm text-slate-500 font-medium">Geospatial revenue and inventory density analysis</p>
-                                    </div>
-                                    <Map className="w-8 h-8 text-indigo-500" />
-                                </CardHeader>
-                                <CardContent className="flex-1 flex flex-col md:flex-row p-0 relative bg-slate-50 min-h-[500px]">
-                                    <div className="flex-1 p-12">
-                                        <InventoryMap
-                                            regions={localRegions}
-                                            onAction={(msg: string, region?: RegionData) => {
-                                                showActionToast(msg);
-                                                if (region) setSelectedRegion(region);
-                                            }}
-                                        />
-                                    </div>
-                                    {selectedRegion && (
-                                        <div className="w-full md:w-80 border-l border-slate-200 bg-white p-8 animate-in slide-in-from-right duration-300 overflow-y-auto">
-                                            <div className="flex justify-between items-start mb-6">
-                                                <h4 className="text-xl font-bold text-slate-900">{selectedRegion.region} Region</h4>
-                                                <Button variant="ghost" size="icon" onClick={() => setSelectedRegion(null)} className="h-6 w-6">×</Button>
-                                            </div>
-                                            <div className="space-y-6">
-                                                <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
-                                                    <p className="text-[10px] font-bold uppercase text-indigo-400 tracking-widest mb-1">Total Revenue</p>
-                                                    <p className="text-2xl font-extrabold text-indigo-900">${(selectedRegion.revenue / 1000).toFixed(1)}k</p>
-                                                </div>
-                                                <div className="space-y-4">
-                                                    <h5 className="text-[10px] font-bold uppercase text-slate-400 tracking-widest">Regional Breakdown</h5>
-                                                    <div className="flex justify-between text-xs font-bold">
-                                                        <span className="text-slate-500">Market Share</span>
-                                                        <span className="text-slate-900">24.5%</span>
-                                                    </div>
-                                                    <div className="flex justify-between text-xs font-bold">
-                                                        <span className="text-slate-500">Active Stores</span>
-                                                        <span className="text-slate-900">12</span>
-                                                    </div>
-                                                    <div className="flex justify-between text-xs font-bold">
-                                                        <span className="text-slate-500">Growth Index</span>
-                                                        <span className="text-emerald-600">+8.2 points</span>
-                                                    </div>
-                                                </div>
-                                                <Button className="w-full bg-slate-900 text-white rounded-xl font-bold py-6 text-xs uppercase tracking-widest mt-4">
-                                                    View Detailed Report
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        </div>
+                        <StoreManagementView onAction={showActionToast} />
                     )}
 
                     {activeTab === 'Smart Forecast' && (
@@ -807,71 +764,6 @@ export default function DashboardPage() {
     )
 }
 
-function InventoryMap({
-    regions,
-    onAction
-}: {
-    regions: RegionData[],
-    onAction: (msg: string, region?: RegionData) => void
-}) {
-    const width = 400
-    const height = 300
-    const maxRev = Math.max(...regions.map((r: RegionData) => r.revenue))
-
-    return (
-        <div className="w-full flex items-center justify-center p-4">
-            <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible">
-                <path
-                    d="M50,100 Q150,50 350,100 T300,250 T50,200 Z"
-                    fill="#f1f5f9"
-                    stroke="#cbd5e1"
-                    strokeWidth="2"
-                />
-
-                {regions.map((region: RegionData, i: number) => {
-                    let x = 200, y = 150;
-                    if (region.region === 'North') { x = 200; y = 80; }
-                    if (region.region === 'South') { x = 200; y = 220; }
-                    if (region.region === 'East') { x = 300; y = 150; }
-                    if (region.region === 'West') { x = 100; y = 150; }
-
-                    const radius = 10 + (region.revenue / maxRev) * 20
-
-                    return (
-                        <g
-                            key={i}
-                            className="cursor-pointer group/node"
-                            onClick={() => onAction(`Analyzing ${region.region} region performance...`, region)}
-                        >
-                            <circle
-                                cx={x}
-                                cy={y}
-                                r={radius}
-                                fill="#6366f1"
-                                className="opacity-20 group-hover/node:opacity-40 transition-opacity"
-                            />
-                            <circle
-                                cx={x}
-                                cy={y}
-                                r={radius / 2}
-                                fill="#6366f1"
-                                className="group-hover/node:scale-110 transition-transform origin-center"
-                            />
-                            <text
-                                x={x}
-                                y={y + radius + 15}
-                                textAnchor="middle"
-                                className="text-[10px] font-bold fill-slate-500 uppercase tracking-tighter"
-                            >
-                                {region.region} (${(region.revenue / 1000).toFixed(0)}k)
-                            </text>
-                        </g>
-                    )
-                })}
-            </svg>
-        </div>
-    )
-}
 
 function PerformanceChart({ data }: { data: SaleRecord[] }) {
     const [hoverIndex, setHoverIndex] = useState<number | null>(null)
@@ -1525,6 +1417,264 @@ function SmartForecastView({ onAction }: { onAction: (msg: string) => void }) {
                     </Button>
                 </div>
             </Card>
+        </div>
+    );
+}
+
+const STATE_COORDINATES: Record<string, [number, number]> = {
+    "AL": [-86.9023, 32.3182], "AK": [-149.4937, 63.5888], "AZ": [-111.0937, 34.0489], "AR": [-92.1999, 34.9697],
+    "CA": [-119.4179, 36.7783], "CO": [-105.7821, 39.5501], "CT": [-72.7273, 41.6032], "DE": [-75.5277, 38.9108],
+    "FL": [-81.5158, 27.6648], "GA": [-82.9001, 32.1656], "HI": [-155.5828, 19.8968], "ID": [-114.7420, 44.0682],
+    "IL": [-89.3985, 40.6331], "IN": [-86.1349, 40.2672], "IA": [-93.0977, 41.8780], "KS": [-98.4842, 39.0119],
+    "KY": [-84.2700, 37.8393], "LA": [-91.9623, 30.9843], "ME": [-69.4455, 45.2538], "MD": [-76.6413, 39.0458],
+    "MA": [-71.3824, 42.4072], "MI": [-84.5361, 44.3148], "MN": [-93.3655, 46.7296], "MS": [-89.3985, 32.3547],
+    "MO": [-91.8318, 37.9643], "MT": [-110.3626, 46.8797], "NE": [-99.9018, 41.1254], "NV": [-116.4194, 38.8026],
+    "NH": [-71.5724, 43.1939], "NJ": [-74.4057, 40.0583], "NM": [-105.8701, 34.5199], "NY": [-75.4999, 43.2994],
+    "NC": [-79.0193, 35.7596], "ND": [-101.0020, 47.5506], "OH": [-82.9071, 40.4173], "OK": [-97.0929, 35.4676],
+    "OR": [-120.5542, 43.8041], "PA": [-77.1945, 41.2033], "RI": [-71.4774, 41.5801], "SC": [-81.1637, 33.8361],
+    "SD": [-99.9018, 44.3106], "TN": [-86.5804, 35.5175], "TX": [-99.9018, 31.9686], "UT": [-111.0937, 39.3210],
+    "VT": [-72.5778, 44.0459], "VA": [-78.6569, 37.4316], "WA": [-120.7401, 47.7511], "WV": [-80.4549, 38.5976],
+    "WI": [-89.6165, 43.7844], "WY": [-107.2903, 43.0760]
+};
+
+interface Store {
+    id: string;
+    name: string;
+    state: string;
+    revenue: number;
+    coordinates: [number, number];
+}
+
+const geoUrl = "https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json";
+
+function StoreManagementView({ onAction }: { onAction: (msg: string) => void }) {
+    const [stores, setStores] = useState<Store[]>([]);
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [hoveredStore, setHoveredStore] = useState<string | null>(null);
+
+    // Load from localStorage on mount
+    useEffect(() => {
+        const savedStores = localStorage.getItem('retail_pulse_stores');
+        if (savedStores) {
+            setStores(JSON.parse(savedStores));
+        } else {
+            const initialStores: Store[] = [
+                { id: '1', name: 'New York Flagship', state: 'NY', revenue: 450000, coordinates: [-75.4999, 43.2994] },
+                { id: '2', name: 'Austin Hub', state: 'TX', revenue: 320000, coordinates: [-99.9018, 31.9686] },
+                { id: '3', name: 'Denver Depot', state: 'CO', revenue: 210000, coordinates: [-105.7821, 39.5501] },
+                { id: '4', name: 'Seattle Outpost', state: 'WA', revenue: 280000, coordinates: [-120.7401, 47.7511] }
+            ];
+            setStores(initialStores);
+            localStorage.setItem('retail_pulse_stores', JSON.stringify(initialStores));
+        }
+    }, []);
+
+    const saveStores = (newStores: Store[]) => {
+        setStores(newStores);
+        localStorage.setItem('retail_pulse_stores', JSON.stringify(newStores));
+    };
+
+    const handleAddStore = (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        const formData = new FormData(e.currentTarget);
+        const name = formData.get('name') as string;
+        const state = formData.get('state') as string;
+        const revenue = parseInt(formData.get('revenue') as string);
+
+        const coordinates = STATE_COORDINATES[state];
+        if (!coordinates) {
+            onAction("Error: Invalid state coordinate mapping.");
+            return;
+        }
+
+        const newStore: Store = {
+            id: Math.random().toString(36).substr(2, 9),
+            name,
+            state,
+            revenue,
+            coordinates
+        };
+
+        saveStores([...stores, newStore]);
+        setIsAddModalOpen(false);
+        onAction(`Successfully added ${name} in ${state}`);
+    };
+
+    const handleDeleteStore = (id: string, name: string) => {
+        const updated = stores.filter(s => s.id !== id);
+        saveStores(updated);
+        onAction(`Removed ${name} from network.`);
+    };
+
+    // Insights Calculation
+    const totalNetworkRevenue = stores.reduce((sum, s) => sum + s.revenue, 0);
+    const topPerformer = [...stores].sort((a, b) => b.revenue - a.revenue)[0];
+
+    const regions = {
+        Midwest: ["IL", "IN", "IA", "KS", "MI", "MN", "MO", "NE", "ND", "OH", "SD", "WI"],
+        South: ["AL", "AR", "DE", "FL", "GA", "KY", "LA", "MD", "MS", "NC", "OK", "SC", "TN", "TX", "VA", "WV"],
+        Northeast: ["CT", "ME", "MA", "NH", "NJ", "NY", "PA", "RI", "VT"],
+        West: ["AK", "AZ", "CA", "CO", "HI", "ID", "MT", "NV", "NM", "OR", "UT", "WA", "WY"]
+    };
+
+    const coverageGap = Object.keys(regions).find(region => {
+        const stateList = (regions as any)[region];
+        return !stores.some(s => stateList.includes(s.state));
+    });
+
+    return (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <Card className="border-slate-200 shadow-xl overflow-hidden min-h-[600px] flex flex-col bg-white relative">
+                <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 bg-slate-50/50 p-8">
+                    <div>
+                        <CardTitle className="text-2xl font-bold">Store Management System</CardTitle>
+                        <p className="text-sm text-slate-500 font-medium">Interactive US network tracking & expansion</p>
+                    </div>
+                    <Button
+                        onClick={() => setIsAddModalOpen(true)}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl px-6 h-12 shadow-lg shadow-indigo-100 transition-all active:scale-95 flex items-center gap-2"
+                    >
+                        <Plus className="w-5 h-5" />
+                        Add Location
+                    </Button>
+                </CardHeader>
+
+                <div className="flex-1 relative bg-slate-50 overflow-hidden">
+                    <ComposableMap projection="geoAlbersUsa" className="w-full h-full">
+                        <Geographies geography={geoUrl}>
+                            {({ geographies }) =>
+                                geographies.map((geo) => (
+                                    <Geography
+                                        key={geo.rsmKey}
+                                        geography={geo}
+                                        fill="#EAEAEC"
+                                        stroke="#D6D6DA"
+                                        style={{
+                                            default: { outline: "none" },
+                                            hover: { fill: "#f1f5f9", outline: "none" },
+                                            pressed: { outline: "none" },
+                                        }}
+                                    />
+                                ))
+                            }
+                        </Geographies>
+                        {stores.map((store) => (
+                            <Marker
+                                key={store.id}
+                                coordinates={store.coordinates}
+                                onMouseEnter={() => setHoveredStore(store.id)}
+                                onMouseLeave={() => setHoveredStore(null)}
+                            >
+                                <g className="cursor-pointer transition-all">
+                                    <circle r={8} fill="#6366f1" stroke="#fff" strokeWidth={2} />
+                                    <circle r={12} fill="#6366f1" className="opacity-20 animate-pulse" />
+                                </g>
+                                {hoveredStore === store.id && (
+                                    <Annotation
+                                        subject={store.coordinates}
+                                        dx={-30}
+                                        dy={-30}
+                                        connectorProps={{
+                                            stroke: "#6366f1",
+                                            strokeWidth: 2,
+                                            strokeLinecap: "round"
+                                        }}
+                                    >
+                                        <g>
+                                            <rect x="-80" y="-50" width="160" height="70" rx="12" className="fill-slate-900 shadow-2xl" />
+                                            <text x="0" y="-30" textAnchor="middle" className="fill-white text-[10px] font-bold uppercase">{store.name}</text>
+                                            <text x="0" y="-15" textAnchor="middle" className="fill-indigo-300 text-[12px] font-extrabold">${(store.revenue / 1000).toFixed(0)}k Revenue</text>
+                                            <foreignObject x="-10" y="0" width="20" height="20">
+                                                <button
+                                                    onClick={() => handleDeleteStore(store.id, store.name)}
+                                                    className="w-5 h-5 bg-rose-500 rounded-md flex items-center justify-center text-white hover:bg-rose-600 transition-colors"
+                                                >
+                                                    <Trash2 size={10} />
+                                                </button>
+                                            </foreignObject>
+                                        </g>
+                                    </Annotation>
+                                )}
+                            </Marker>
+                        ))}
+                    </ComposableMap>
+                </div>
+
+                {/* Smart Insights Panel */}
+                <div className="p-8 border-t border-slate-100 bg-white">
+                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-6">Regional Intelligence</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div className="p-6 bg-indigo-50 rounded-3xl border border-indigo-100">
+                            <p className="text-[10px] font-bold uppercase text-indigo-400 tracking-widest mb-1">Total Network Revenue</p>
+                            <p className="text-3xl font-extrabold text-indigo-900">${(totalNetworkRevenue / 1000).toFixed(1)}k</p>
+                            <p className="text-[10px] text-indigo-400 font-medium mt-1">Aggregated across {stores.length} locations</p>
+                        </div>
+                        <div className="p-6 bg-emerald-50 rounded-3xl border border-emerald-100">
+                            <p className="text-[10px] font-bold uppercase text-emerald-400 tracking-widest mb-1">Top Performing Location</p>
+                            <p className="text-2xl font-extrabold text-emerald-900">{topPerformer?.name || "N/A"}</p>
+                            <p className="text-[10px] text-emerald-400 font-medium mt-1">${(topPerformer?.revenue / 1000).toFixed(0)}k Projected Revenue</p>
+                        </div>
+                        <div className="p-6 bg-amber-50 rounded-3xl border border-amber-100">
+                            <p className="text-[10px] font-bold uppercase text-amber-500 tracking-widest mb-1">Coverage Gaps</p>
+                            <p className="text-2xl font-extrabold text-amber-700">{coverageGap ? `No presence in ${coverageGap}` : "Full coverage"}</p>
+                            <p className="text-[10px] text-amber-500 font-medium mt-1">Expansion recommended in {coverageGap || "none"}</p>
+                        </div>
+                    </div>
+                </div>
+            </Card>
+
+            {/* Add Store Modal */}
+            {isAddModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300 p-4">
+                    <Card className="w-full max-w-md border-none shadow-2xl rounded-3xl overflow-hidden">
+                        <CardHeader className="bg-indigo-600 text-white p-8">
+                            <CardTitle className="text-2xl font-bold">Add New Location</CardTitle>
+                            <p className="text-indigo-100 text-sm opacity-80 mt-1">Register a new store point on the US map</p>
+                        </CardHeader>
+                        <CardContent className="p-8 bg-white space-y-6">
+                            <form onSubmit={handleAddStore} className="space-y-6">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Store Name</label>
+                                    <input
+                                        name="name"
+                                        required
+                                        className="w-full h-12 px-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-bold"
+                                        placeholder="e.g. Chicago Flagship"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">State Code</label>
+                                        <select
+                                            name="state"
+                                            required
+                                            className="w-full h-12 px-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-bold"
+                                        >
+                                            {Object.keys(STATE_COORDINATES).sort().map(s => (
+                                                <option key={s} value={s}>{s}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Revenue</label>
+                                        <input
+                                            name="revenue"
+                                            type="number"
+                                            required
+                                            className="w-full h-12 px-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-bold"
+                                            placeholder="e.g. 150000"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex gap-4 pt-4">
+                                    <Button type="button" variant="ghost" onClick={() => setIsAddModalOpen(false)} className="flex-1 rounded-xl font-bold">Cancel</Button>
+                                    <Button type="submit" className="flex-1 bg-indigo-600 text-white rounded-xl font-bold h-12 shadow-lg shadow-indigo-100">Deploy Location</Button>
+                                </div>
+                            </form>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
         </div>
     );
 }
