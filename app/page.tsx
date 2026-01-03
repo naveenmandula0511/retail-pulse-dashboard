@@ -223,7 +223,7 @@ export default function DashboardPage() {
                                                         </td>
                                                         <td className="px-6 py-4">
                                                             <Badge
-                                                                variant={(item.status === 'Critical' ? 'destructive' : item.status === 'Low Stock' ? 'secondary' : 'default') as any}
+                                                                variant={item.status === 'Critical' ? 'destructive' : item.status === 'Low Stock' ? 'secondary' : 'default'}
                                                                 className={cn(
                                                                     "text-[10px] font-bold uppercase tracking-widest px-2 py-0.5",
                                                                     item.status === 'Low Stock' && "bg-amber-100 text-amber-700 hover:bg-amber-100 border-amber-200",
@@ -482,7 +482,7 @@ function SmartInsightHub({ inventory, sales }: { inventory: InventoryItem[], sal
                         </div>
                         <CardTitle className="text-lg font-bold">Pulse AI Hub</CardTitle>
                     </div>
-                    <Badge variant={"outline" as any} className="bg-indigo-500/10 text-indigo-400 border-indigo-500/30 text-[10px] uppercase font-bold tracking-widest animate-pulse">
+                    <Badge variant="outline" className="bg-indigo-500/10 text-indigo-400 border-indigo-500/30 text-[10px] uppercase font-bold tracking-widest animate-pulse">
                         Neural Scan Active
                     </Badge>
                 </div>
