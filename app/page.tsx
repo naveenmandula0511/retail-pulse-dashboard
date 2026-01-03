@@ -343,18 +343,18 @@ function InventoryMap({ regions }: { regions: RegionData[] }) {
     )
 }
 
-function PerformanceChart({ data }: { data: any[] }) {
+function PerformanceChart({ data }: { data: SaleRecord[] }) {
     const height = 320
     const width = 1000
     const padding = 50
 
-    const maxRevenue = Math.max(...data.map(d => d.revenue))
+    const maxRevenue = Math.max(...data.map((d: SaleRecord) => d.revenue))
     const chartHeight = height - padding * 2
     const chartWidth = width - padding * 2
 
     // Helper to map data to SVG coordinates
-    const getPoints = (key: string) => {
-        return data.map((d, i) => {
+    const getPoints = (key: 'revenue' | 'profit') => {
+        return data.map((d: SaleRecord, i: number) => {
             const x = padding + (i / (data.length - 1)) * chartWidth
             const y = height - padding - (d[key] / maxRevenue) * chartHeight
             return `${x},${y}`
@@ -393,7 +393,7 @@ function PerformanceChart({ data }: { data: any[] }) {
                 ))}
 
                 {/* Vertical Date Labels */}
-                {data.filter((_, i) => i % 5 === 0).map((d, i) => {
+                {data.filter((_, i: number) => i % 5 === 0).map((d: SaleRecord, i: number) => {
                     const x = padding + (data.indexOf(d) / (data.length - 1)) * chartWidth
                     return (
                         <text
@@ -464,7 +464,7 @@ function PerformanceChart({ data }: { data: any[] }) {
     )
 }
 
-function SmartInsightHub({ inventory, sales }: { inventory: InventoryItem[], sales: any[] }) {
+function SmartInsightHub({ inventory, sales }: { inventory: InventoryItem[], sales: SaleRecord[] }) {
     const criticalItems = inventory.filter(item => item.status === 'Critical')
     const lowStockItems = inventory.filter(item => item.status === 'Low Stock')
 
@@ -482,7 +482,7 @@ function SmartInsightHub({ inventory, sales }: { inventory: InventoryItem[], sal
                         </div>
                         <CardTitle className="text-lg font-bold">Pulse AI Hub</CardTitle>
                     </div>
-                    <Badge variant="outline" className="bg-indigo-500/10 text-indigo-400 border-indigo-500/30 text-[10px] uppercase font-bold tracking-widest animate-pulse">
+                    <Badge variant={"outline" as any} className="bg-indigo-500/10 text-indigo-400 border-indigo-500/30 text-[10px] uppercase font-bold tracking-widest animate-pulse">
                         Neural Scan Active
                     </Badge>
                 </div>
