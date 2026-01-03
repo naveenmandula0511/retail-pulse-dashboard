@@ -17,6 +17,16 @@ const config: Config = {
                 "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
                 "gradient-conic": "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
             },
+            keyframes: {
+                "pulse-dot": {
+                    "0%": { transform: "scale(0.8)" },
+                    "50%": { transform: "scale(1)" },
+                    "100%": { transform: "scale(0.8)" },
+                }
+            },
+            animation: {
+                "pulse-dot": "pulse-dot 1.25s cubic-bezier(0.455, 0.03, 0.515, 0.955) -0.4s infinite",
+            },
         },
     },
     plugins: [],

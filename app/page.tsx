@@ -33,7 +33,8 @@ import {
     Clock,
     Coins,
     Percent,
-    Store
+    Store,
+    Lock
 } from "lucide-react"
 import {
     ComposableMap,
@@ -1453,21 +1454,6 @@ function SmartInsightHub({
 
     return (
         <Card className="border-none bg-slate-950 text-white overflow-hidden h-full relative group shadow-2xl">
-            <style jsx global>{`
-                @keyframes pulse-ring {
-                    0% { transform: scale(.33); }
-                    80%, 100% { opacity: 0; }
-                }
-                @keyframes pulse-dot {
-                    0% { transform: scale(.8); }
-                    50% { transform: scale(1); }
-                    100% { transform: scale(.8); }
-                }
-                .pulse-animation {
-                    animation: pulse-dot 1.25s cubic-bezier(0.455, 0.03, 0.515, 0.955) -0.4s infinite;
-                }
-            `}</style>
-            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 blur-[100px] pointer-events-none" />
             <CardHeader className="relative z-10 border-b border-white/5 pb-4">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -1480,7 +1466,7 @@ function SmartInsightHub({
                 <div className="space-y-4">
                     <div className="p-4 rounded-2xl bg-white/5 border border-white/10 relative overflow-hidden">
                         <div className="flex items-center gap-3 mb-2">
-                            <Radio className={cn("w-5 h-5 text-indigo-400", isPulsing && "pulse-animation text-rose-400")} />
+                            <Radio className={cn("w-5 h-5 text-indigo-400", isPulsing && "animate-pulse-dot text-rose-400")} />
                             <span className="text-sm font-bold">Neural Demand Scan</span>
                         </div>
                         <p className="text-xs text-slate-400">
@@ -1970,7 +1956,7 @@ const STATE_COORDINATES: Record<string, [number, number]> = {
     "WI": [-89.6165, 43.7844], "WY": [-107.2903, 43.0760]
 };
 
-interface Store {
+interface StoreLocation {
     id: string;
     name: string;
     state: string;
@@ -1981,7 +1967,7 @@ interface Store {
 const geoUrl = "https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json";
 
 function StoreManagementView({ onAction }: { onAction: (msg: string) => void }) {
-    const [stores, setStores] = useState<Store[]>([]);
+    const [stores, setStores] = useState<StoreLocation[]>([]);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [hoveredStore, setHoveredStore] = useState<string | null>(null);
 
@@ -1991,7 +1977,7 @@ function StoreManagementView({ onAction }: { onAction: (msg: string) => void }) 
         if (savedStores) {
             setStores(JSON.parse(savedStores));
         } else {
-            const initialStores: Store[] = [
+            const initialStores: StoreLocation[] = [
                 { id: '1', name: 'New York Flagship', state: 'NY', revenue: 450000, coordinates: [-75.4999, 43.2994] },
                 { id: '2', name: 'Austin Hub', state: 'TX', revenue: 320000, coordinates: [-99.9018, 31.9686] },
                 { id: '3', name: 'Denver Depot', state: 'CO', revenue: 210000, coordinates: [-105.7821, 39.5501] },
@@ -2002,7 +1988,7 @@ function StoreManagementView({ onAction }: { onAction: (msg: string) => void }) 
         }
     }, []);
 
-    const saveStores = (newStores: Store[]) => {
+    const saveStores = (newStores: StoreLocation[]) => {
         setStores(newStores);
         localStorage.setItem('retail_pulse_stores', JSON.stringify(newStores));
     };
@@ -2020,7 +2006,7 @@ function StoreManagementView({ onAction }: { onAction: (msg: string) => void }) 
             return;
         }
 
-        const newStore: Store = {
+        const newStore: StoreLocation = {
             id: Math.random().toString(36).substr(2, 9),
             name,
             state,
