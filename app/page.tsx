@@ -409,7 +409,9 @@ export default function DashboardPage() {
                             {/* Center Panel (Analytics & AI Chat) */}
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
                                 <div className="lg:col-span-2">
-                                    <RevenueChart />
+                                    <Card className="border-none shadow-xl shadow-slate-200/50 rounded-3xl overflow-hidden h-[400px] bg-white">
+                                        <RevenueChart />
+                                    </Card>
                                 </div>
                                 <div className="lg:col-span-1">
                                     <AIChatHub
