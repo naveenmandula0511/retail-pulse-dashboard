@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react"
 import { RevenueChart } from "@/components/RevenueChart"
 import { GeminiInsight } from "@/components/GeminiInsight"
+import { InventoryList } from "@/components/InventoryList"
 import {
     Activity,
     LayoutDashboard,
@@ -422,7 +423,14 @@ export default function DashboardPage() {
                             {/* Secondary Layer (Category Distribution & Conversion) */}
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
                                 <div className="lg:col-span-1">
-                                    <CategoryDistributionChart inventory={localInventory} />
+                                    <Card className="border-none shadow-xl shadow-slate-200/50 rounded-3xl overflow-hidden h-full bg-white">
+                                        <CardHeader className="bg-white border-b border-slate-50 p-6">
+                                            <CardTitle className="text-lg font-black italic text-slate-900">Inventory Monitor</CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="p-0">
+                                            <InventoryList />
+                                        </CardContent>
+                                    </Card>
                                 </div>
                                 <div className="lg:col-span-2">
                                     <ConversionFunnel data={localSales} />
