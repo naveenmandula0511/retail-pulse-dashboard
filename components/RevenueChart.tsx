@@ -12,7 +12,7 @@ import {
 } from "recharts"
 import { salesData } from "../lib/mockData"
 
-const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
+const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
         return (
             <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl shadow-xl">
