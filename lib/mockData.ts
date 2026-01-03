@@ -47,17 +47,21 @@ export const salesData: SaleRecord[] = Array.from({ length: 30 }).map((_, i) => 
 });
 
 /**
- * Inventory health status for top 8 items
+ * Inventory health status for top 12 items (Electronics focused)
  */
 export const inventoryData: InventoryItem[] = [
-    { id: 'SKU-001', name: 'Wireless Earbuds', stock: 0, status: 'Critical' },
-    { id: 'SKU-002', name: 'Smart Watch Pro', stock: 12, status: 'Low Stock' },
-    { id: 'SKU-003', name: 'Noise Cancelling Headphones', stock: 45, status: 'In Stock' },
-    { id: 'SKU-004', name: 'Bluetooth Speaker', stock: 8, status: 'Low Stock' },
-    { id: 'SKU-005', name: 'USB-C Charging Hub', stock: 89, status: 'In Stock' },
-    { id: 'SKU-006', name: 'MagSafe Power Bank', stock: 34, status: 'In Stock' },
-    { id: 'SKU-007', name: 'Leather Phone Case', stock: 5, status: 'Low Stock' },
-    { id: 'SKU-008', name: 'Mechanical Keyboard', stock: 22, status: 'In Stock' },
+    { id: 'ELC-001', name: 'Wireless Earbuds X-200', stock: 15, status: 'In Stock' },
+    { id: 'ELC-002', name: 'Smart Watch Series 9', stock: 0, status: 'Critical' },
+    { id: 'ELC-003', name: 'AirPods Pro Gen 2', stock: 5, status: 'Low Stock' },
+    { id: 'ELC-004', name: '4K OLED Gaming Monitor', stock: 12, status: 'In Stock' },
+    { id: 'ELC-005', name: 'Mechanical RGB Keyboard', stock: 8, status: 'Low Stock' },
+    { id: 'ELC-006', name: 'USB-C Charging Hub 7-in-1', stock: 89, status: 'In Stock' },
+    { id: 'ELC-007', name: 'MagSafe Leather Wallet', stock: 34, status: 'In Stock' },
+    { id: 'ELC-008', name: 'Noise Cancelling Headphones', stock: 22, status: 'In Stock' },
+    { id: 'ELC-009', name: 'Bluetooth Soundbar 300W', stock: 3, status: 'Low Stock' },
+    { id: 'ELC-010', name: 'DualSense Wireless Controller', stock: 45, status: 'In Stock' },
+    { id: 'ELC-011', name: 'High-Speed HDMI 2.1 Cable', stock: 120, status: 'In Stock' },
+    { id: 'ELC-012', name: 'Portable SSD 2TB', stock: 0, status: 'Critical' },
 ];
 
 /**

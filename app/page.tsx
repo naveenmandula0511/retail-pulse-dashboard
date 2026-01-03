@@ -20,7 +20,9 @@ import {
     Sparkles,
     BrainCircuit,
     ChevronRight,
-    MessageSquare
+    MessageSquare,
+    Radio,
+    Loader2
 } from "lucide-react"
 import {
     Card,
@@ -46,9 +48,39 @@ export default function DashboardPage() {
     const [localSales, setLocalSales] = useState<SaleRecord[]>(salesData);
     const [localRegions, setLocalRegions] = useState<RegionData[]>(regionData);
 
-    // Modal State
+    // Modal & Selection State
     const [isAddSKUModalOpen, setIsAddSKUModalOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+    const [selectedRegion, setSelectedRegion] = useState<RegionData | null>(null);
+    const [loadingSKU, setLoadingSKU] = useState<string | null>(null);
+
+    const handleAutoReorder = async (sku: string, productName: string) => {
+        setLoadingSKU(sku);
+        try {
+            const res = await fetch(`/api/restock/${sku}`, { method: 'POST' });
+            const data = await res.json();
+
+            if (data.success) {
+                setLocalInventory((prev: InventoryItem[]) => prev.map((item: InventoryItem) => {
+                    if (item.id === sku) {
+                        const newStock = item.stock + 50;
+                        return {
+                            ...item,
+                            stock: newStock,
+                            status: 'In Stock'
+                        };
+                    }
+                    return item;
+                }));
+                showActionToast(`Success: Order placed for ${productName}`);
+            }
+        } catch (error) {
+            console.error('Restock failed:', error);
+            showActionToast('Error: Failed to place restock order.');
+        } finally {
+            setLoadingSKU(null);
+        }
+    };
 
     // Toast Timer
     useEffect(() => {
@@ -195,8 +227,68 @@ export default function DashboardPage() {
                         </p>
                     </div>
 
+                    {/* Global Search Overlay */}
+                    {searchQuery && (
+                        <div className="animate-in fade-in slide-in-from-top-4 duration-300">
+                            <Card className="border-indigo-200 shadow-2xl bg-white/80 backdrop-blur-xl rounded-3xl overflow-hidden border-2 mb-8">
+                                <CardHeader className="bg-indigo-50/50 border-b border-indigo-100 p-6 flex flex-row items-center justify-between">
+                                    <div>
+                                        <CardTitle className="text-xl font-bold text-indigo-900 flex items-center gap-2">
+                                            <Search className="w-5 h-5" />
+                                            Search Results for "{searchQuery}"
+                                        </CardTitle>
+                                        <p className="text-sm text-indigo-600 font-medium">Found {localInventory.filter((i: InventoryItem) => i.name.toLowerCase().includes(searchQuery.toLowerCase())).length} items across the network</p>
+                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        onClick={() => setSearchQuery('')}
+                                        className="text-indigo-600 hover:bg-indigo-100 font-bold"
+                                    >
+                                        Clear Search
+                                    </Button>
+                                </CardHeader>
+                                <CardContent className="p-0">
+                                    <div className="max-h-96 overflow-y-auto">
+                                        <table className="w-full text-left">
+                                            <tbody className="divide-y divide-slate-100">
+                                                {localInventory
+                                                    .filter((item: InventoryItem) => item.name.toLowerCase().includes(searchQuery.toLowerCase()) || item.id.toLowerCase().includes(searchQuery.toLowerCase()))
+                                                    .map((item: InventoryItem) => (
+                                                        <tr key={item.id} className="hover:bg-indigo-50/50 transition-colors">
+                                                            <td className="px-8 py-4 font-mono text-xs text-slate-400">{item.id}</td>
+                                                            <td className="px-8 py-4 font-bold text-slate-900">{item.name}</td>
+                                                            <td className="px-8 py-4">
+                                                                <Badge
+                                                                    variant={item.status === 'In Stock' ? 'default' : item.status === 'Low Stock' ? 'secondary' : 'destructive'}
+                                                                >
+                                                                    {item.status} ({item.stock} in stock)
+                                                                </Badge>
+                                                            </td>
+                                                            <td className="px-8 py-4 text-right">
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="text-indigo-600 font-bold"
+                                                                    onClick={() => {
+                                                                        setActiveTab('Overview');
+                                                                        setSearchQuery(item.name); // Keep search but focus overview
+                                                                    }}
+                                                                >
+                                                                    View Details
+                                                                </Button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    )}
+
                     {/* Dynamic View Rendering */}
-                    {activeTab === 'Overview' && (
+                    {!searchQuery && activeTab === 'Overview' && (
                         <>
                             {/* KPI Cards Grid */}
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -237,7 +329,10 @@ export default function DashboardPage() {
                                     <Card className="border-slate-200 shadow-sm overflow-hidden h-full">
                                         <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 bg-slate-50/50">
                                             <div>
-                                                <CardTitle className="text-lg font-bold text-slate-900">Performance Analytics</CardTitle>
+                                                <CardTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                                                    Performance Analytics
+                                                    <Badge variant="outline" className="text-[10px] uppercase font-bold text-indigo-500">Source: Real-time State</Badge>
+                                                </CardTitle>
                                                 <p className="text-sm text-slate-500">Revenue vs. Profit trends (Last 30 Days)</p>
                                             </div>
                                             <div className="flex items-center gap-6">
@@ -257,13 +352,31 @@ export default function DashboardPage() {
                                     </Card>
                                 </div>
 
-                                {/* AI Smart Insights Hub */}
+                                {/* Deep Analytics: Category Share */}
+                                <div className="lg:col-span-1">
+                                    <CategoryDistributionChart inventory={localInventory} />
+                                </div>
+                            </div>
+
+                            {/* Additional Analytics: Visitor Conversion */}
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                 <div className="lg:col-span-1">
                                     <SmartInsightHub
                                         inventory={localInventory}
                                         sales={localSales}
                                         onAction={showActionToast}
                                     />
+                                </div>
+                                <div className="lg:col-span-2">
+                                    <Card className="border-slate-200 shadow-sm h-full overflow-hidden">
+                                        <CardHeader className="bg-slate-50/50 border-b border-slate-100">
+                                            <CardTitle className="text-lg font-bold">Vistor-to-Sale Conversion</CardTitle>
+                                            <p className="text-sm text-slate-500">Engagement efficiency across electronics categories</p>
+                                        </CardHeader>
+                                        <CardContent className="pt-8">
+                                            <ConversionFunnel data={localSales} />
+                                        </CardContent>
+                                    </Card>
                                 </div>
                             </div>
 
@@ -303,8 +416,8 @@ export default function DashboardPage() {
                                                     </thead>
                                                     <tbody className="divide-y divide-slate-100">
                                                         {localInventory
-                                                            .filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()) || item.id.toLowerCase().includes(searchQuery.toLowerCase()))
-                                                            .map((item) => (
+                                                            .filter((item: InventoryItem) => item.name.toLowerCase().includes(searchQuery.toLowerCase()) || item.id.toLowerCase().includes(searchQuery.toLowerCase()))
+                                                            .map((item: InventoryItem) => (
                                                                 <tr key={item.id} className="hover:bg-indigo-50/30 transition-colors group">
                                                                     <td className="px-6 py-4 font-mono text-xs font-bold text-slate-500">{item.id}</td>
                                                                     <td className="px-6 py-4">
@@ -340,29 +453,58 @@ export default function DashboardPage() {
                                                                         </Badge>
                                                                     </td>
                                                                     <td className="px-6 py-4 text-right">
-                                                                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                                                                            <Button
-                                                                                variant="ghost"
-                                                                                size="icon"
-                                                                                className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-white"
-                                                                                onClick={() => {
-                                                                                    setEditingItem(item);
-                                                                                    setIsAddSKUModalOpen(true);
-                                                                                }}
-                                                                            >
-                                                                                <Settings className="w-4 h-4" />
-                                                                            </Button>
-                                                                            <Button
-                                                                                variant="ghost"
-                                                                                size="icon"
-                                                                                className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-white"
-                                                                                onClick={() => {
-                                                                                    setLocalInventory(prev => prev.filter(i => i.id !== item.id));
-                                                                                    showActionToast(`Successfully removed ${item.name} from inventory.`);
-                                                                                }}
-                                                                            >
-                                                                                <AlertTriangle className="w-4 h-4" />
-                                                                            </Button>
+                                                                        <div className="flex items-center justify-end gap-2">
+                                                                            {item.status === 'In Stock' ? (
+                                                                                <Button
+                                                                                    variant="ghost"
+                                                                                    size="sm"
+                                                                                    className="h-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 font-bold"
+                                                                                    onClick={() => {
+                                                                                        setEditingItem(item);
+                                                                                        setIsAddSKUModalOpen(true);
+                                                                                    }}
+                                                                                >
+                                                                                    Edit Details
+                                                                                </Button>
+                                                                            ) : (
+                                                                                <Button
+                                                                                    variant="default"
+                                                                                    size="sm"
+                                                                                    disabled={loadingSKU === item.id}
+                                                                                    className="h-8 bg-indigo-600 hover:bg-indigo-700 text-white font-bold min-w-[110px]"
+                                                                                    onClick={() => handleAutoReorder(item.id, item.name)}
+                                                                                >
+                                                                                    {loadingSKU === item.id ? (
+                                                                                        <Loader2 className="w-3 h-3 animate-spin mr-2" />
+                                                                                    ) : null}
+                                                                                    Auto-Reorder
+                                                                                </Button>
+                                                                            )}
+
+                                                                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all ml-2">
+                                                                                <Button
+                                                                                    variant="ghost"
+                                                                                    size="icon"
+                                                                                    className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-white"
+                                                                                    onClick={() => {
+                                                                                        setEditingItem(item);
+                                                                                        setIsAddSKUModalOpen(true);
+                                                                                    }}
+                                                                                >
+                                                                                    <Settings className="w-4 h-4" />
+                                                                                </Button>
+                                                                                <Button
+                                                                                    variant="ghost"
+                                                                                    size="icon"
+                                                                                    className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-white"
+                                                                                    onClick={() => {
+                                                                                        setLocalInventory((prev: InventoryItem[]) => prev.filter((i: InventoryItem) => i.id !== item.id));
+                                                                                        showActionToast(`Successfully removed ${item.name} from inventory.`);
+                                                                                    }}
+                                                                                >
+                                                                                    <AlertTriangle className="w-4 h-4" />
+                                                                                </Button>
+                                                                            </div>
                                                                         </div>
                                                                     </td>
                                                                 </tr>
@@ -377,7 +519,7 @@ export default function DashboardPage() {
                         </>
                     )}
 
-                    {activeTab === 'Inventory Map' && (
+                    {!searchQuery && activeTab === 'Inventory Map' && (
                         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                             <Card className="border-slate-200 shadow-xl overflow-hidden min-h-[500px] flex flex-col">
                                 <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 bg-slate-50/50 p-8">
@@ -387,54 +529,55 @@ export default function DashboardPage() {
                                     </div>
                                     <Map className="w-8 h-8 text-indigo-500" />
                                 </CardHeader>
-                                <CardContent className="flex-1 flex items-center justify-center p-0 relative bg-slate-50">
-                                    <div className="w-full h-full max-w-4xl p-12">
+                                <CardContent className="flex-1 flex flex-col md:flex-row p-0 relative bg-slate-50 min-h-[500px]">
+                                    <div className="flex-1 p-12">
                                         <InventoryMap
                                             regions={localRegions}
-                                            onAction={showActionToast}
+                                            onAction={(msg: string, region?: RegionData) => {
+                                                showActionToast(msg);
+                                                if (region) setSelectedRegion(region);
+                                            }}
                                         />
                                     </div>
+                                    {selectedRegion && (
+                                        <div className="w-full md:w-80 border-l border-slate-200 bg-white p-8 animate-in slide-in-from-right duration-300 overflow-y-auto">
+                                            <div className="flex justify-between items-start mb-6">
+                                                <h4 className="text-xl font-bold text-slate-900">{selectedRegion.region} Region</h4>
+                                                <Button variant="ghost" size="icon" onClick={() => setSelectedRegion(null)} className="h-6 w-6">×</Button>
+                                            </div>
+                                            <div className="space-y-6">
+                                                <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
+                                                    <p className="text-[10px] font-bold uppercase text-indigo-400 tracking-widest mb-1">Total Revenue</p>
+                                                    <p className="text-2xl font-extrabold text-indigo-900">${(selectedRegion.revenue / 1000).toFixed(1)}k</p>
+                                                </div>
+                                                <div className="space-y-4">
+                                                    <h5 className="text-[10px] font-bold uppercase text-slate-400 tracking-widest">Regional Breakdown</h5>
+                                                    <div className="flex justify-between text-xs font-bold">
+                                                        <span className="text-slate-500">Market Share</span>
+                                                        <span className="text-slate-900">24.5%</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-xs font-bold">
+                                                        <span className="text-slate-500">Active Stores</span>
+                                                        <span className="text-slate-900">12</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-xs font-bold">
+                                                        <span className="text-slate-500">Growth Index</span>
+                                                        <span className="text-emerald-600">+8.2 points</span>
+                                                    </div>
+                                                </div>
+                                                <Button className="w-full bg-slate-900 text-white rounded-xl font-bold py-6 text-xs uppercase tracking-widest mt-4">
+                                                    View Detailed Report
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </CardContent>
                             </Card>
                         </div>
                     )}
 
                     {activeTab === 'Smart Forecast' && (
-                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <Card className="border-slate-200 shadow-xl overflow-hidden p-8 bg-indigo-900 text-white relative">
-                                <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 blur-[120px] -mr-48 -mt-48" />
-                                <div className="flex flex-col md:flex-row items-center gap-12 relative z-10">
-                                    <div className="flex-1 space-y-6">
-                                        <div className="flex items-center gap-3">
-                                            <Sparkles className="w-10 h-10 text-amber-400" />
-                                            <h2 className="text-4xl font-bold tracking-tight">AI Demand Projections</h2>
-                                        </div>
-                                        <p className="text-xl text-indigo-100 leading-relaxed font-medium">
-                                            Our Pulse AI models have processed the last 30 days of sales data and predicted a
-                                            <span className="text-white font-bold mx-2 px-2 py-1 bg-white/10 rounded-lg">12.4% increase</span>
-                                            in revenue for the upcoming Q1 retail window.
-                                        </p>
-                                        <div className="grid grid-cols-2 gap-6 pt-4">
-                                            <div className="bg-white/10 p-6 rounded-3xl border border-white/10 backdrop-blur-md">
-                                                <p className="text-xs font-bold uppercase tracking-widest text-indigo-300 mb-2">Confidence Score</p>
-                                                <p className="text-3xl font-bold font-mono text-emerald-400">98.2%</p>
-                                            </div>
-                                            <div className="bg-white/10 p-6 rounded-3xl border border-white/10 backdrop-blur-md">
-                                                <p className="text-xs font-bold uppercase tracking-widest text-indigo-300 mb-2">Target Growth</p>
-                                                <p className="text-3xl font-bold font-mono text-white">+$142k</p>
-                                            </div>
-                                        </div>
-                                        <Button className="w-full bg-white text-indigo-900 hover:bg-indigo-50 font-bold py-8 text-xl rounded-2xl shadow-2xl transition-all active:scale-95 mt-4">
-                                            Generate Full AI Prediction Model
-                                        </Button>
-                                    </div>
-                                    <div className="w-full md:w-96 aspect-square bg-white/5 rounded-full border border-indigo-400/20 flex items-center justify-center relative overflow-hidden group">
-                                        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-transparent animate-pulse" />
-                                        <BrainCircuit className="w-56 h-56 text-indigo-300 relative z-10 transition-transform duration-700 group-hover:scale-110" />
-                                    </div>
-                                </div>
-                            </Card>
-                        </div>
+                        <SmartForecastView />
                     )}
 
                     {activeTab === 'Settings' && (
@@ -579,7 +722,7 @@ export default function DashboardPage() {
                         </CardHeader>
                         <CardContent className="p-8 bg-white space-y-6">
                             <form
-                                onSubmit={(e) => {
+                                onSubmit={(e: React.FormEvent<HTMLFormElement>) => {
                                     e.preventDefault();
                                     const formData = new FormData(e.currentTarget);
                                     const name = formData.get('name') as string;
@@ -587,7 +730,7 @@ export default function DashboardPage() {
                                     const status = stock === 0 ? 'Critical' : stock < 15 ? 'Low Stock' : 'In Stock';
 
                                     if (editingItem) {
-                                        setLocalInventory(prev => prev.map(item => item.id === editingItem.id ? { ...item, name, stock, status } : item));
+                                        setLocalInventory((prev: InventoryItem[]) => prev.map((item: InventoryItem) => item.id === editingItem.id ? { ...item, name, stock, status } : item));
                                         showActionToast(`Successfully updated ${name}`);
                                     } else {
                                         const newSKUIntoState: InventoryItem = {
@@ -596,7 +739,7 @@ export default function DashboardPage() {
                                             stock,
                                             status
                                         };
-                                        setLocalInventory(prev => [newSKUIntoState, ...prev]);
+                                        setLocalInventory((prev: InventoryItem[]) => [newSKUIntoState, ...prev]);
                                         showActionToast(`Added new product: ${name}`);
                                     }
                                     setIsAddSKUModalOpen(false);
@@ -668,11 +811,11 @@ function InventoryMap({
     onAction
 }: {
     regions: RegionData[],
-    onAction: (msg: string) => void
+    onAction: (msg: string, region?: RegionData) => void
 }) {
     const width = 400
     const height = 300
-    const maxRev = Math.max(...regions.map(r => r.revenue))
+    const maxRev = Math.max(...regions.map((r: RegionData) => r.revenue))
 
     return (
         <div className="w-full flex items-center justify-center p-4">
@@ -684,7 +827,7 @@ function InventoryMap({
                     strokeWidth="2"
                 />
 
-                {regions.map((region, i) => {
+                {regions.map((region: RegionData, i: number) => {
                     let x = 200, y = 150;
                     if (region.region === 'North') { x = 200; y = 80; }
                     if (region.region === 'South') { x = 200; y = 220; }
@@ -697,7 +840,7 @@ function InventoryMap({
                         <g
                             key={i}
                             className="cursor-pointer group/node"
-                            onClick={() => onAction(`Analyzing ${region.region} region performance...`)}
+                            onClick={() => onAction(`Analyzing ${region.region} region performance...`, region)}
                         >
                             <circle
                                 cx={x}
@@ -861,9 +1004,43 @@ function SmartInsightHub({
     onAction: (msg: string) => void
 }) {
     const criticalItems = inventory.filter(item => item.status === 'Critical')
+    const [demandData, setDemandData] = useState<{ region: string, category: string } | null>(null)
+    const [isPulsing, setIsPulsing] = useState(false)
+
+    useEffect(() => {
+        const fetchDemand = async () => {
+            try {
+                const res = await fetch('/api/ai/demand-velocity')
+                const data = await res.json()
+                setDemandData(data)
+                setIsPulsing(true)
+                setTimeout(() => setIsPulsing(false), 2000)
+            } catch (error) {
+                console.error('Failed to fetch demand velocity:', error)
+            }
+        }
+
+        fetchDemand()
+        const interval = setInterval(fetchDemand, 30000)
+        return () => clearInterval(interval)
+    }, [])
 
     return (
         <Card className="border-none bg-slate-950 text-white overflow-hidden h-full relative group shadow-2xl">
+            <style jsx global>{`
+                @keyframes pulse-ring {
+                    0% { transform: scale(.33); }
+                    80%, 100% { opacity: 0; }
+                }
+                @keyframes pulse-dot {
+                    0% { transform: scale(.8); }
+                    50% { transform: scale(1); }
+                    100% { transform: scale(.8); }
+                }
+                .pulse-animation {
+                    animation: pulse-dot 1.25s cubic-bezier(0.455, 0.03, 0.515, 0.955) -0.4s infinite;
+                }
+            `}</style>
             <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 blur-[100px] pointer-events-none" />
             <CardHeader className="relative z-10 border-b border-white/5 pb-4">
                 <div className="flex items-center justify-between">
@@ -875,13 +1052,13 @@ function SmartInsightHub({
             </CardHeader>
             <CardContent className="relative z-10 p-6 space-y-6">
                 <div className="space-y-4">
-                    <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
+                    <div className="p-4 rounded-2xl bg-white/5 border border-white/10 relative overflow-hidden">
                         <div className="flex items-center gap-3 mb-2">
-                            <BrainCircuit className="w-5 h-5 text-indigo-400" />
+                            <Radio className={cn("w-5 h-5 text-indigo-400", isPulsing && "pulse-animation text-rose-400")} />
                             <span className="text-sm font-bold">Neural Demand Scan</span>
                         </div>
                         <p className="text-xs text-slate-400">
-                            Higher velocity detected in <span className="text-white font-bold underline">West Region</span> for Home Electronics.
+                            Higher velocity detected in <span className="text-white font-bold underline">{demandData?.region || "Scanning..."}</span> for {demandData?.category || "Analyzing Trends..."}.
                         </p>
                     </div>
 
@@ -973,4 +1150,400 @@ function KPICard({
             )}
         </Card>
     )
+}
+
+function CategoryDistributionChart({ inventory }: { inventory: InventoryItem[] }) {
+    const categories = ['Audio', 'Computing', 'Mobile', 'Peripherals'];
+    const counts = categories.map(cat => {
+        return inventory.filter((_, i: number) => (i % 4) === categories.indexOf(cat)).length;
+    });
+    const total = counts.reduce((a, b) => a + b, 0);
+
+    return (
+        <Card className="border-slate-200 shadow-sm h-full">
+            <CardHeader className="bg-slate-50/50 border-b border-slate-100">
+                <CardTitle className="text-lg font-bold">Category Share</CardTitle>
+                <p className="text-sm text-slate-500">Inventory volume by sector</p>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-4">
+                {categories.map((cat, i) => (
+                    <div key={cat} className="space-y-1.5" id={`cat-row-${cat}`}>
+                        <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-slate-500">
+                            <span>{cat}</span>
+                            <span>{total > 0 ? Math.round((counts[i] / total) * 100) : 0}%</span>
+                        </div>
+                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                                className={cn(
+                                    "h-full rounded-full transition-all duration-1000",
+                                    i === 0 ? "bg-indigo-500" : i === 1 ? "bg-emerald-500" : i === 2 ? "bg-amber-500" : "bg-rose-500"
+                                )}
+                                style={{ width: `${total > 0 ? (counts[i] / total) * 100 : 0}%` }}
+                            />
+                        </div>
+                    </div>
+                ))}
+            </CardContent>
+        </Card>
+    );
+}
+
+function ConversionFunnel({ data }: { data: SaleRecord[] }) {
+    const totalVisitors = data.reduce((acc, curr) => acc + curr.visitors, 0);
+    const convertedVisitors = Math.floor(totalVisitors * 0.12);
+
+    return (
+        <div className="flex flex-col gap-6 items-center">
+            <div className="w-full max-w-md space-y-8">
+                <FunnelStep
+                    label="Reach"
+                    value={totalVisitors.toLocaleString()}
+                    sub="Total Unique Visitors"
+                    color="bg-indigo-500"
+                    width="100%"
+                />
+                <FunnelStep
+                    label="Intent"
+                    value={Math.floor(totalVisitors * 0.45).toLocaleString()}
+                    sub="Product View Rate (45%)"
+                    color="bg-indigo-400"
+                    width="75%"
+                />
+                <FunnelStep
+                    label="Sales"
+                    value={convertedVisitors.toLocaleString()}
+                    sub="Checkout Completion (12%)"
+                    color="bg-indigo-600"
+                    width="50%"
+                />
+            </div>
+            <div className="grid grid-cols-3 gap-8 w-full border-t border-slate-100 pt-8">
+                <div className="text-center">
+                    <p className="text-[10px] font-bold uppercase text-slate-400 tracking-widest mb-1">CAC</p>
+                    <p className="text-xl font-extrabold text-slate-900">$14.20</p>
+                </div>
+                <div className="text-center">
+                    <p className="text-[10px] font-bold uppercase text-slate-400 tracking-widest mb-1">ROAS</p>
+                    <p className="text-xl font-extrabold text-emerald-600">4.2x</p>
+                </div>
+                <div className="text-center">
+                    <p className="text-[10px] font-bold uppercase text-slate-400 tracking-widest mb-1">LTV</p>
+                    <p className="text-xl font-extrabold text-slate-900">$210</p>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function SmartForecastView() {
+    const [scenario, setScenario] = useState<'Realistic' | 'Optimistic' | 'Pessimistic'>('Realistic');
+    const [historicalData, setHistoricalData] = useState<{ x: number, y: number }[]>([]);
+    const [projectionData, setProjectionData] = useState<{ x: number, y: number }[]>([]);
+
+    // AI Model Activation State
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
+    const [showModel, setShowModel] = useState(false);
+
+    useEffect(() => {
+        // Generate 6 months (180 days) of historical data
+        const history = Array.from({ length: 180 }, (_, i) => ({
+            x: i,
+            y: 5000 + Math.random() * 2000 + (i * 15) // Slight upward trend
+        }));
+        setHistoricalData(history);
+
+        // Linear Regression calculation
+        const n = history.length;
+        let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+        history.forEach(p => {
+            sumX += p.x;
+            sumY += p.y;
+            sumXY += p.x * p.y;
+            sumX2 += p.x * p.x;
+        });
+
+        const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+        const intercept = (sumY - slope * sumX) / n;
+
+        // Growth multipliers
+        const multipliers = {
+            Optimistic: 1.15,
+            Realistic: 1.0,
+            Pessimistic: 0.85
+        };
+
+        const multiplier = multipliers[scenario];
+
+        // Project next 90 days if in advanced mode, otherwise 30
+        const projectionLength = showModel ? 90 : 30;
+        const totalLength = 180 + projectionLength;
+        const projection = Array.from({ length: projectionLength }, (_, i) => {
+            const x = 180 + i;
+            // For advanced model, use a target growth of 12.4% (multiplier 1.124)
+            const growthFactor = showModel ? 1.124 : multiplier;
+            const y = (slope * x + intercept) * growthFactor;
+            return { x, y };
+        });
+
+        setProjectionData(projection);
+    }, [scenario, showModel]);
+
+    const handleGenerateModel = () => {
+        setIsGenerating(true);
+        setTimeout(() => {
+            setIsGenerating(false);
+            setShowModel(true);
+        }, 2000);
+    };
+
+    const handleExportPDF = () => {
+        setIsExporting(true);
+        setTimeout(() => {
+            const blob = new Blob(["Dummy PDF content for Retail Pulse Q1 Forecast"], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'RetailPulse_Q1_Forecast.pdf';
+            a.click();
+            window.URL.revokeObjectURL(url);
+            showActionToast("Report downloaded successfully.");
+            setIsExporting(false);
+        }, 3000);
+    };
+
+    const width = 1000;
+    const height = 400;
+    const padding = 60;
+    const totalX = showModel ? 270 : 210;
+
+    const allData = [...historicalData, ...projectionData];
+    const maxY = Math.max(...allData.map(d => d.y)) * 1.1;
+    const minY = Math.min(...allData.map(d => d.y)) * 0.9;
+
+    const mapX = (x: number) => padding + (x / totalX) * (width - padding * 2);
+    const mapY = (y: number) => height - padding - ((y - minY) / (maxY - minY)) * (height - padding * 2);
+
+    const historyPoints = historicalData.map(d => `${mapX(d.x)},${mapY(d.y)}`).join(' ');
+    const projectionPoints = projectionData.map(d => `${mapX(d.x)},${mapY(d.y)}`).join(' ');
+
+    // Confidence Area: 98.2% Confidence (±2% margin)
+    const confidenceAreaPoints = (() => {
+        if (!showModel) return "";
+        const upper = projectionData.map(d => `${mapX(d.x)},${mapY(d.y * 1.02)}`);
+        const lower = [...projectionData].reverse().map(d => `${mapX(d.x)},${mapY(d.y * 0.98)}`);
+        return [...upper, ...lower].join(' ');
+    })();
+
+    if (!showModel) {
+        return (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <Card className="border-slate-200 shadow-xl overflow-hidden p-8 bg-indigo-900 text-white relative">
+                    <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 blur-[120px] -mr-48 -mt-48" />
+                    <div className="flex flex-col md:flex-row items-center gap-12 relative z-10">
+                        <div className="flex-1 space-y-6">
+                            <div className="flex items-center gap-3">
+                                <Sparkles className="w-10 h-10 text-amber-400" />
+                                <h2 className="text-4xl font-bold tracking-tight">AI Demand Projections</h2>
+                            </div>
+                            <p className="text-xl text-indigo-100 leading-relaxed font-medium">
+                                Our Pulse AI models have processed the last 30 days of sales data and predicted a
+                                <span className="text-white font-bold mx-2 px-2 py-1 bg-white/10 rounded-lg">12.4% increase</span>
+                                in revenue for the upcoming Q1 retail window.
+                            </p>
+                            <div className="grid grid-cols-2 gap-6 pt-4">
+                                <div className="bg-white/10 p-6 rounded-3xl border border-white/10 backdrop-blur-md">
+                                    <p className="text-xs font-bold uppercase tracking-widest text-indigo-300 mb-2">Confidence Score</p>
+                                    <p className="text-3xl font-bold font-mono text-emerald-400">98.2%</p>
+                                </div>
+                                <div className="bg-white/10 p-6 rounded-3xl border border-white/10 backdrop-blur-md">
+                                    <p className="text-xs font-bold uppercase tracking-widest text-indigo-300 mb-2">Target Growth</p>
+                                    <p className="text-3xl font-bold font-mono text-white">+$142k</p>
+                                </div>
+                            </div>
+                            <Button
+                                onClick={handleGenerateModel}
+                                disabled={isGenerating}
+                                className="w-full bg-white text-indigo-900 hover:bg-indigo-50 font-bold py-8 text-xl rounded-2xl shadow-2xl transition-all active:scale-95 mt-4 group/gen"
+                            >
+                                {isGenerating ? (
+                                    <>
+                                        <Loader2 className="w-6 h-6 animate-spin mr-3" />
+                                        Processing...
+                                    </>
+                                ) : (
+                                    "Generate Full AI Prediction Model"
+                                )}
+                            </Button>
+                        </div>
+                        <div className="w-full md:w-96 aspect-square bg-white/5 rounded-full border border-indigo-400/20 flex items-center justify-center relative overflow-hidden group">
+                            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-transparent animate-pulse" />
+                            <BrainCircuit className="w-56 h-56 text-indigo-300 relative z-10 transition-transform duration-700 group-hover:scale-110" />
+                        </div>
+                    </div>
+                </Card>
+
+                {/* Secondary 'Realistic' View (Visible before full model) */}
+                <Card className="border-slate-200 shadow-xl overflow-hidden p-8 bg-white relative opacity-50 grayscale pointer-events-none">
+                    <p className="text-center font-bold text-slate-400 flex items-center justify-center gap-2">
+                        <Settings className="w-4 h-4" />
+                        Activate Advanced AI Model to Unlock Full Workspace
+                    </p>
+                </Card>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <Card className="border-slate-200 shadow-2xl overflow-hidden p-8 bg-white relative">
+                <div className="flex items-center justify-between mb-8">
+                    <div>
+                        <div className="flex items-center gap-2 mb-1">
+                            <Badge className="bg-indigo-600 text-[10px] uppercase tracking-wider">Advanced Model Active</Badge>
+                            <span className="text-xs font-bold text-emerald-600">98.2% Accuracy</span>
+                        </div>
+                        <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight">Q1 Predicted Revenue Velocity</h3>
+                        <p className="text-slate-500 font-medium">90-Day Full Spectrum Forecast (Last 180 Days Baseline)</p>
+                    </div>
+                    <Button variant="ghost" onClick={() => setShowModel(false)} className="text-slate-400 hover:text-slate-600 font-bold">Reset Analysis</Button>
+                </div>
+
+                <div className="relative w-full h-[450px]">
+                    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
+                        <defs>
+                            <linearGradient id="confGrad" x1="0" x2="0" y1="0" y2="1">
+                                <stop offset="0%" stopColor="#6366f1" stopOpacity="0.05" />
+                                <stop offset="100%" stopColor="#6366f1" stopOpacity="0.05" />
+                            </linearGradient>
+                        </defs>
+
+                        {/* Grid Lines */}
+                        {[0, 0.25, 0.5, 0.75, 1].map((p, i) => (
+                            <g key={i}>
+                                <line
+                                    x1={padding}
+                                    y1={height - padding - p * (height - padding * 2)}
+                                    x2={width - padding}
+                                    y2={height - padding - p * (height - padding * 2)}
+                                    stroke="#f1f5f9"
+                                    strokeWidth="1.5"
+                                />
+                                <text
+                                    x={padding - 12}
+                                    y={height - padding - p * (height - padding * 2) + 4}
+                                    textAnchor="end"
+                                    className="text-[11px] fill-slate-400 font-bold font-mono"
+                                >
+                                    ${Math.floor((minY + p * (maxY - minY)) / 1000)}k
+                                </text>
+                            </g>
+                        ))}
+
+                        {/* Confidence Interval Shaded Area */}
+                        <polygon points={confidenceAreaPoints} fill="url(#confGrad)" className="animate-in fade-in duration-1000" />
+
+                        {/* X-Axis Labels */}
+                        <text x={padding} y={height - padding + 25} className="text-[11px] fill-slate-400 font-bold uppercase tracking-widest">History (-6 Months)</text>
+                        <text x={mapX(180)} y={height - padding + 25} textAnchor="middle" className="text-[11px] fill-indigo-600 font-extrabold uppercase tracking-widest bg-indigo-50">Pulse Baseline</text>
+                        <text x={width - padding} y={height - padding + 25} textAnchor="end" className="text-[11px] fill-slate-400 font-bold uppercase tracking-widest">Q1 Projection (+90d)</text>
+
+                        {/* Historical Line (Solid) */}
+                        <polyline
+                            fill="none"
+                            stroke="#cbd5e1"
+                            strokeWidth="2"
+                            points={historyPoints}
+                        />
+
+                        {/* Projection Line (Dashed) */}
+                        <polyline
+                            fill="none"
+                            stroke="#6366f1"
+                            strokeWidth="4"
+                            strokeDasharray="8 8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            points={projectionPoints}
+                            className="animate-in slide-in-from-left-full duration-1000"
+                        />
+
+                        {/* Intersection Marker */}
+                        <circle
+                            cx={mapX(180)}
+                            cy={mapY(historicalData[historicalData.length - 1].y)}
+                            r="6"
+                            fill="#6366f1"
+                            stroke="white"
+                            strokeWidth="3"
+                            className="drop-shadow-lg"
+                        />
+                    </svg>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mt-12 border-t border-slate-100 pt-8">
+                    <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                        <p className="text-[10px] font-bold uppercase text-slate-400 tracking-widest mb-2 text-indigo-600">Strategic Driver 01</p>
+                        <p className="font-bold text-slate-900 text-sm mb-1">Seasonal Uptick</p>
+                        <p className="text-xs text-slate-500 leading-relaxed">Historical Q1 performance shows a consistent 8.4% volume surge in home electronics.</p>
+                    </div>
+                    <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                        <p className="text-[10px] font-bold uppercase text-slate-400 tracking-widest mb-2 text-indigo-600">Strategic Driver 02</p>
+                        <p className="font-bold text-slate-900 text-sm mb-1">Competitor Stockout</p>
+                        <p className="text-xs text-slate-500 leading-relaxed">Cross-market scanning detects inventory shortages in 3 primary regional competitors.</p>
+                    </div>
+                    <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                        <p className="text-[10px] font-bold uppercase text-slate-400 tracking-widest mb-2 text-indigo-600">Strategic Driver 03</p>
+                        <p className="font-bold text-slate-900 text-sm mb-1">Stock Optimization</p>
+                        <p className="text-xs text-slate-500 leading-relaxed">New inventory arrival cycles are synchronized with high-velocity demand clusters.</p>
+                    </div>
+                    <div className="bg-emerald-500 p-6 rounded-3xl text-white shadow-xl shadow-emerald-100">
+                        <p className="text-[10px] font-bold uppercase text-emerald-100 tracking-widest mb-2">Growth Metric</p>
+                        <p className="text-3xl font-extrabold">+12.4%</p>
+                        <p className="text-xs font-medium text-emerald-100 leading-relaxed mt-1">Net Revenue Impact</p>
+                    </div>
+                </div>
+                <div className="flex flex-col md:flex-row gap-4 mt-8 pt-8 border-t border-slate-100">
+                    <Button
+                        variant="outline"
+                        onClick={handleExportPDF}
+                        disabled={isExporting}
+                        className="rounded-xl font-bold border-slate-200 text-slate-600 hover:bg-slate-50 h-14 px-8 min-w-[200px]"
+                    >
+                        {isExporting ? (
+                            <>
+                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                Generating...
+                            </>
+                        ) : (
+                            <>
+                                <Download className="w-4 h-4 mr-2" />
+                                Export PDF Report
+                            </>
+                        )}
+                    </Button>
+                </div>
+            </Card>
+        </div>
+    );
+}
+
+function FunnelStep({ label, value, sub, color, width }: { label: string, value: string, sub: string, color: string, width: string }) {
+    return (
+        <div className="flex items-center gap-6">
+            <div className="w-24 text-right">
+                <p className="text-sm font-extrabold text-slate-900">{label}</p>
+            </div>
+            <div className="flex-1 relative">
+                <div className={cn("h-12 rounded-2xl relative z-10 overflow-hidden shadow-lg", color)} style={{ width }}>
+                    <div className="absolute inset-0 bg-white/10" />
+                    <div className="absolute inset-0 flex items-center justify-between px-6">
+                        <span className="text-white font-extrabold">{value}</span>
+                        <TrendingUp className="w-4 h-4 text-white/40" />
+                    </div>
+                </div>
+                <p className="absolute -bottom-6 left-0 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{sub}</p>
+            </div>
+        </div>
+    );
 }
