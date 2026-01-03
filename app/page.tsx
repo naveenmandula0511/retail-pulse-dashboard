@@ -493,7 +493,7 @@ export default function DashboardPage() {
                     <SKUModal
                         item={editingItem}
                         onClose={() => setIsAddSKUModalOpen(false)}
-                        onSave={(newItem) => {
+                        onSave={(newItem: InventoryItem) => {
                             if (editingItem) {
                                 setLocalInventory(prev => prev.map(i => i.id === editingItem.id ? newItem : i));
                                 showActionToast(`Updated SKU: ${newItem.id}`);
@@ -766,7 +766,7 @@ function AIChatHub({
     )
 }
 
-function CategoryDistributionChart({ data }: { data: SaleRecord[] }) {
+function CategoryDistributionChart({ inventory }: { inventory: InventoryItem[] }) {
     const categories = [
         { name: 'Audio', color: 'bg-indigo-500' },
         { name: 'Computing', color: 'bg-emerald-500' },
@@ -869,37 +869,38 @@ function InventoryItemRow({ item }: { item: InventoryItem }) {
 }
 
 function InventoryTable({
-    inventory,
-    searchQuery,
-    statusFilter
+    data,
+    onSort,
+    sortConfig,
+    onAction
 }: {
-    inventory: InventoryItem[],
-    searchQuery: string,
-    statusFilter: string | null
+    data: InventoryItem[],
+    onSort: (key: keyof InventoryItem) => void,
+    sortConfig: { key: keyof InventoryItem; direction: 'asc' | 'desc' } | null,
+    onAction: (message: string) => void
 }) {
-    const filtered = inventory.filter(p => {
-        const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            p.id.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesFilter = !statusFilter || p.status === statusFilter;
-        return matchesSearch && matchesFilter;
-    });
-
     return (
         <Card className="border-none shadow-xl shadow-slate-200/50 rounded-[2.5rem] overflow-hidden bg-white">
             <table className="w-full text-left border-collapse">
                 <thead>
                     <tr className="border-b border-slate-50">
-                        <th className="py-6 pl-8 text-[10px] font-black text-slate-400 uppercase tracking-widest">Product Intelligence</th>
-                        <th className="py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Global Stock</th>
-                        <th className="py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Neural Status</th>
+                        <th className="py-6 pl-8 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => onSort('name')}>
+                            Product Intelligence {sortConfig?.key === 'name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                        </th>
+                        <th className="py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => onSort('stock')}>
+                            Global Stock {sortConfig?.key === 'stock' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                        </th>
+                        <th className="py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => onSort('status')}>
+                            Neural Status {sortConfig?.key === 'status' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                        </th>
                         <th className="py-6 pr-8 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Control Matrix</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                    {filtered.map((item) => (
+                    {data.map((item) => (
                         <InventoryItemRow key={item.id} item={item} />
                     ))}
-                    {filtered.length === 0 && (
+                    {data.length === 0 && (
                         <tr>
                             <td colSpan={4} className="py-20 text-center">
                                 <div className="flex flex-col items-center gap-4 text-slate-300">
