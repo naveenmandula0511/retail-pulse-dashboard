@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import {
     Activity,
     LayoutDashboard,
@@ -34,7 +34,14 @@ import {
     Coins,
     Percent,
     Store,
-    Lock
+    Lock,
+    Send,
+    Filter,
+    Calendar,
+    ChevronDown,
+    Edit3,
+    ArrowUp,
+    ArrowDown
 } from "lucide-react"
 import {
     ComposableMap,
@@ -43,6 +50,22 @@ import {
     Marker,
     Annotation
 } from "react-simple-maps"
+import {
+    LineChart,
+    Line,
+    AreaChart,
+    Area,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    ResponsiveContainer,
+    BarChart,
+    Bar,
+    Cell,
+    PieChart,
+    Pie
+} from "recharts"
 import {
     Card,
     CardContent,
@@ -55,1449 +78,459 @@ import { Badge } from "@/components/ui/badge"
 import { salesData, inventoryData, regionData, type RegionData, type InventoryItem, type SaleRecord } from "@/lib/mockData"
 import { cn } from "@/lib/utils"
 
+// --- Types ---
+interface ChatMessage {
+    id: string;
+    role: 'user' | 'ai';
+    content: string;
+    timestamp: Date;
+}
+
+interface StoreLocation {
+    id: string;
+    name: string;
+    state: string;
+    revenue: number;
+    coordinates: [number, number];
+}
+
 export default function DashboardPage() {
-    // State Management
+    // Basic Navigation & UI State
     const [activeTab, setActiveTab] = useState('Overview');
     const [searchQuery, setSearchQuery] = useState('');
     const [notifications, setNotifications] = useState(3);
     const [toast, setToast] = useState<{ message: string, type: 'info' | 'success' } | null>(null);
 
-    // Application Data State (Lifting mock data to state for CRUD)
+    // Global Filters
+    const [dateRange, setDateRange] = useState('Last 30 Days');
+    const [regionFilter, setRegionFilter] = useState('All Regions');
+    const [tableFilter, setTableFilter] = useState<string | null>(null);
+
+    // Data State
     const [localInventory, setLocalInventory] = useState<InventoryItem[]>(inventoryData);
     const [localSales, setLocalSales] = useState<SaleRecord[]>(salesData);
     const [localRegions, setLocalRegions] = useState<RegionData[]>(regionData);
 
-    // Modal & Selection State
+    // AI Chat State
+    const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+        { id: '1', role: 'ai', content: "Hello! I'm your RetailPulse Advisor. I've detected a possible stockout risk in the Audio category. Should we review the Seattle hub performance?", timestamp: new Date() }
+    ]);
+    const [chatInput, setChatInput] = useState('');
+    const [isChatLoading, setIsChatLoading] = useState(false);
+    const chatEndRef = useRef<HTMLDivElement>(null);
+
+    // Table State
+    const [sortConfig, setSortConfig] = useState<{ key: keyof InventoryItem, direction: 'asc' | 'desc' } | null>({ key: 'stock', direction: 'asc' });
+
+    // Modals
     const [isAddSKUModalOpen, setIsAddSKUModalOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
-    const [selectedRegion, setSelectedRegion] = useState<RegionData | null>(null);
-    const [loadingSKU, setLoadingSKU] = useState<string | null>(null);
-
-    // Settings State
-    const [darkMode, setDarkMode] = useState<boolean>(false);
-    const [notificationStatus, setNotificationStatus] = useState<'default' | 'granted' | 'denied' | 'unsupported'>('default');
-    const [isSaving, setIsSaving] = useState(false);
     const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
-    // Store Configuration State
-    const [storeName, setStoreName] = useState("RetailPulse Electronics - Flagship");
-    const [currency, setCurrency] = useState("USD");
-    const [taxRate, setTaxRate] = useState(8.5);
-    const [operatingHours, setOperatingHours] = useState("09:00 - 21:00");
-
-    // Team State
-    const [teamMembers, setTeamMembers] = useState([
-        { id: 1, name: "Naveen M.", role: "Admin", email: "admin@retailpulse.ai", avatar: "NM" },
-        { id: 2, name: "Sarah J.", role: "Store Manager", email: "sarah@retailpulse.ai", avatar: "SJ" },
-        { id: 3, name: "Mike R.", role: "Sales Assoc", email: "mike@retailpulse.ai", avatar: "MR" }
-    ]);
-
-    // Theme Persistence Effect
+    // Scroll chat to bottom
     useEffect(() => {
-        const savedTheme = localStorage.getItem('retailpulse-theme');
-        if (savedTheme === 'dark') {
-            setDarkMode(true);
-            document.body.classList.add('dark-theme');
-        } else if (savedTheme === 'light') {
-            document.body.classList.remove('dark-theme');
-        } else if (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-            setDarkMode(true);
-            document.body.classList.add('dark-theme');
-        }
-    }, []);
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [chatMessages]);
 
-    // Dark Mode Toggle Logic
-    const toggleDarkMode = () => {
-        const nextMode = !darkMode;
-        setDarkMode(nextMode);
-        if (nextMode) {
-            document.body.classList.add('dark-theme');
-            localStorage.setItem('retailpulse-theme', 'dark');
-        } else {
-            document.body.classList.remove('dark-theme');
-            localStorage.setItem('retailpulse-theme', 'light');
-        }
-    };
+    // AI Chat Logic
+    const handleSendMessage = async () => {
+        if (!chatInput.trim()) return;
 
-    // Notification Logic
-    const handleNotificationToggle = async () => {
-        if (!('Notification' in window)) {
-            setNotificationStatus('unsupported');
-            showActionToast('Browser does not support notifications.');
-            return;
-        }
+        const newUserMsg: ChatMessage = {
+            id: Math.random().toString(),
+            role: 'user',
+            content: chatInput,
+            timestamp: new Date()
+        };
 
-        const permission = await Notification.requestPermission();
-        setNotificationStatus(permission);
-        if (permission === 'granted') {
-            showActionToast('Stock alerts enabled.');
-        } else {
-            showActionToast('Notifications currently restricted.');
-        }
-    };
+        setChatMessages(prev => [...prev, newUserMsg]);
+        setChatInput('');
+        setIsChatLoading(true);
 
-    // Save Changes Handler
-    const handleSaveChanges = async () => {
-        setIsSaving(true);
-        // Simulate collecting state
-        const config = { storeName, currency, taxRate, operatingHours, darkMode };
-        console.log("Saving Store Config:", config);
-
-        // Simulate network latency (1.5s as requested)
+        // Simulate AI Response
         await new Promise(resolve => setTimeout(resolve, 1500));
-        setIsSaving(false);
-        setToast({ message: 'Settings Updated Successfully', type: 'success' });
+
+        const aiResponse: ChatMessage = {
+            id: Math.random().toString(),
+            role: 'ai',
+            content: "Based on the Last 30 Days data and Current Region filters, your conversion rate is up by 4.2%. However, 'Quantum Headphones' in the South region are at critical levels. I've prepared a restock draft for you.",
+            timestamp: new Date()
+        };
+
+        setChatMessages(prev => [...prev, aiResponse]);
+        setIsChatLoading(false);
     };
 
-    const handleAutoReorder = async (sku: string, productName: string) => {
-        setLoadingSKU(sku);
-        try {
-            const res = await fetch(`/api/restock/${sku}`, { method: 'POST' });
-            const data = await res.json();
-
-            if (data.success) {
-                setLocalInventory((prev: InventoryItem[]) => prev.map((item: InventoryItem) => {
-                    if (item.id === sku) {
-                        const newStock = item.stock + 50;
-                        return {
-                            ...item,
-                            stock: newStock,
-                            status: 'In Stock'
-                        };
-                    }
-                    return item;
-                }));
-                showActionToast(`Success: Order placed for ${productName}`);
-            }
-        } catch (error) {
-            console.error('Restock failed:', error);
-            showActionToast('Error: Failed to place restock order.');
-        } finally {
-            setLoadingSKU(null);
+    // Sorting Logic
+    const handleSort = (key: keyof InventoryItem) => {
+        let direction: 'asc' | 'desc' = 'asc';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
         }
+        setSortConfig({ key, direction });
     };
 
-    // Toast Timer
-    useEffect(() => {
-        if (toast) {
-            const timer = setTimeout(() => setToast(null), 3000);
-            return () => clearTimeout(timer);
-        }
-    }, [toast]);
+    const sortedInventory = [...localInventory]
+        .filter(item => {
+            const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || item.id.toLowerCase().includes(searchQuery.toLowerCase());
+            const matchesFilter = !tableFilter || item.status === tableFilter || (tableFilter === 'Critical' && item.stock <= 5);
+            return matchesSearch && matchesFilter;
+        })
+        .sort((a, b) => {
+            if (!sortConfig) return 0;
+            const { key, direction } = sortConfig;
+            if (a[key] < b[key]) return direction === 'asc' ? -1 : 1;
+            if (a[key] > b[key]) return direction === 'asc' ? 1 : -1;
+            return 0;
+        });
 
     const showActionToast = (message: string) => {
         setToast({ message, type: 'info' });
+        setTimeout(() => setToast(null), 3000);
     };
 
-    // Calculate Metrics (Derived from state)
-    const totalRevenue = localSales.reduce((acc: number, curr: SaleRecord) => acc + curr.revenue, 0);
-    const activeStores = localRegions.length;
-    const stockoutRiskCount = localInventory.filter((item: InventoryItem) => item.status !== 'In Stock').length;
+    // Metrics calculation
+    const totalRevenue = 128400; // Simulated
+    const revenueTrend = 12.4;
+    const activeStoresCount = 4;
+    const stockoutRiskCount = localInventory.filter(i => i.status !== 'In Stock').length;
 
-    // Simulated trend based on last 2 days
-    const lastDayRevenue = localSales[localSales.length - 1]?.revenue || 0;
-    const prevDayRevenue = localSales[localSales.length - 2]?.revenue || 0;
-    const revenueTrend = prevDayRevenue ? ((lastDayRevenue - prevDayRevenue) / prevDayRevenue) * 100 : 0;
 
     return (
-        <div className="flex h-screen w-full bg-slate-50">
-            {/* Sidebar */}
-            <aside className="w-64 bg-slate-950 text-white flex flex-col h-full shrink-0">
-                <div className="p-6 flex items-center gap-3">
-                    <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center">
-                        <Activity className="text-white w-5 h-5" />
+        <div className="flex h-screen w-full bg-[#f8fafc]">
+            {/* Sidebar (Dark Mode) */}
+            <aside className="w-72 bg-slate-950 text-white flex flex-col h-full shrink-0 shadow-2xl z-20">
+                <div className="p-8 flex items-center gap-4">
+                    <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                        <Activity className="text-white w-6 h-6" />
                     </div>
-                    <span className="text-xl font-bold tracking-tight">RetailPulse</span>
+                    <span className="text-2xl font-black tracking-tight uppercase italic">Pulse<span className="text-indigo-500">Center</span></span>
                 </div>
 
-                <nav className="flex-1 px-4 py-4 space-y-1">
+                <nav className="flex-1 px-6 pt-4 space-y-2">
                     <NavItem
-                        icon={<LayoutDashboard />}
-                        label="Overview"
+                        icon={<LayoutDashboard className="w-5 h-5" />}
+                        label="Command Center"
                         active={activeTab === 'Overview'}
                         onClick={() => setActiveTab('Overview')}
                     />
                     <NavItem
-                        icon={<Map />}
-                        label="Inventory Map"
+                        icon={<Map className="w-5 h-5" />}
+                        label="Regional Intel"
                         active={activeTab === 'Inventory Map'}
                         onClick={() => setActiveTab('Inventory Map')}
                     />
                     <NavItem
-                        icon={<TrendingUp />}
-                        label="Smart Forecast"
+                        icon={<TrendingUp className="w-5 h-5" />}
+                        label="AI Forecast"
                         active={activeTab === 'Smart Forecast'}
                         onClick={() => setActiveTab('Smart Forecast')}
                     />
                     <NavItem
-                        icon={<Settings />}
-                        label="Settings"
+                        icon={<Settings className="w-5 h-5" />}
+                        label="System Config"
                         active={activeTab === 'Settings'}
                         onClick={() => setActiveTab('Settings')}
                     />
                 </nav>
 
-                <div className="p-6 border-t border-white/10">
+                <div className="p-8 mt-auto border-t border-white/5 bg-white/[0.02]">
+                    <div className="bg-indigo-600/10 rounded-2xl p-4 border border-indigo-500/20 mb-6">
+                        <div className="flex items-center gap-2 mb-2">
+                            <Sparkles className="w-4 h-4 text-indigo-400" />
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-300">Pro Authority</span>
+                        </div>
+                        <p className="text-xs text-slate-400 font-medium leading-relaxed">Advanced predictive models are currently active.</p>
+                    </div>
+
                     <button
                         onClick={() => setActiveTab('Profile')}
                         className={cn(
-                            "flex items-center gap-3 w-full p-2 rounded-xl transition-all text-left group",
+                            "flex items-center gap-4 w-full p-2 rounded-2xl transition-all text-left",
                             activeTab === 'Profile' ? "bg-white/10" : "hover:bg-white/5"
                         )}
                     >
-                        <Avatar className="h-8 w-8 border border-white/20 group-hover:border-white/40 transition-colors">
+                        <Avatar className="h-10 w-10 border-2 border-slate-800 rounded-xl">
                             <AvatarImage src="https://github.com/shadcn.png" />
-                            <AvatarFallback>AD</AvatarFallback>
+                            <AvatarFallback className="bg-slate-800">NM</AvatarFallback>
                         </Avatar>
                         <div className="overflow-hidden">
-                            <p className="text-sm font-medium truncate">Admin User</p>
-                            <p className="text-xs text-slate-400 truncate">Store Owner</p>
+                            <p className="text-sm font-bold truncate">Naveen M.</p>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Sr. Operations</p>
                         </div>
                     </button>
                 </div>
             </aside>
 
-            {/* Main Content Area */}
+            {/* Main Content */}
             <main className="flex-1 flex flex-col h-full overflow-hidden">
-                {/* Top Bar */}
-                <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0">
-                    <form
-                        onSubmit={(e: React.FormEvent) => {
-                            e.preventDefault();
-                            if (searchQuery) showActionToast(`Searching for "${searchQuery}"...`);
-                        }}
-                        className="relative w-96"
-                    >
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                        <input
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
-                            placeholder="Search data, metrics, reports..."
-                            className="w-full bg-slate-100 border-none rounded-full pl-10 pr-4 py-2 text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500/20"
-                        />
-                    </form>
-
-                    <div className="flex items-center gap-4">
-                        <div className="relative">
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="text-slate-500"
-                                onClick={() => {
-                                    setNotifications(0);
-                                    showActionToast("Opening Notifications...");
-                                }}
-                            >
-                                <Bell className="w-5 h-5" />
-                                {notifications > 0 && (
-                                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white" />
-                                )}
-                            </Button>
+                {/* Modern Header */}
+                <header className="h-24 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-10 shrink-0 z-10">
+                    <div className="flex items-center gap-10">
+                        <div className="relative group">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Search inventory, sales, hubs..."
+                                className="w-96 bg-slate-100/50 border-2 border-transparent rounded-2xl pl-12 pr-6 py-3 text-sm text-slate-900 focus:bg-white focus:border-indigo-500/20 outline-none transition-all placeholder:text-slate-400 font-medium"
+                            />
                         </div>
-                        <Avatar
-                            className="h-9 w-9 border border-slate-200 cursor-pointer hover:ring-2 hover:ring-indigo-500/20 transition-all"
-                            onClick={() => showActionToast("User Avatar clicked - Opening Menu...")}
+
+                        <div className="h-10 w-px bg-slate-200" />
+
+                        <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2 bg-slate-100/50 p-1.5 rounded-2xl border border-slate-200/50">
+                                <Button
+                                    variant="ghost"
+                                    className="h-10 px-4 rounded-xl text-xs font-bold gap-2 text-slate-600 hover:bg-white hover:text-indigo-600 shadow-none transition-all"
+                                >
+                                    <Calendar className="w-4 h-4" />
+                                    {dateRange}
+                                    <ChevronDown className="w-3 h-3" />
+                                </Button>
+                            </div>
+                            <div className="flex items-center gap-2 bg-slate-100/50 p-1.5 rounded-2xl border border-slate-200/50">
+                                <Button
+                                    variant="ghost"
+                                    className="h-10 px-4 rounded-xl text-xs font-bold gap-2 text-slate-600 hover:bg-white hover:text-indigo-600 shadow-none transition-all"
+                                >
+                                    <Filter className="w-4 h-4" />
+                                    {regionFilter}
+                                    <ChevronDown className="w-3 h-3" />
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-6">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="bg-slate-100/50 rounded-2xl h-12 w-12 text-slate-500 hover:bg-rose-50 hover:text-rose-500 transition-all relative"
+                            onClick={() => { setNotifications(0); showActionToast("Alerts Clear"); }}
                         >
-                            <AvatarImage src="https://github.com/shadcn.png" />
-                            <AvatarFallback>CN</AvatarFallback>
-                        </Avatar>
+                            <Bell className="w-5 h-5" />
+                            {notifications > 0 && (
+                                <span className="absolute top-3 right-3 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white animate-pulse" />
+                            )}
+                        </Button>
+                        <div className="h-12 w-px bg-slate-200" />
+                        <div className="flex items-center gap-4 bg-slate-100/50 pr-4 pl-1.5 py-1.5 rounded-2xl border border-slate-200/50 hover:bg-slate-100 transition-all cursor-pointer">
+                            <Avatar className="h-9 w-9 rounded-xl border border-white shadow-sm">
+                                <AvatarImage src="https://github.com/shadcn.png" />
+                                <AvatarFallback>AD</AvatarFallback>
+                            </Avatar>
+                            <div className="text-right">
+                                <p className="text-xs font-black text-slate-900 uppercase tracking-tighter">Production Hub</p>
+                                <p className="text-[10px] text-emerald-600 font-bold">Online</p>
+                            </div>
+                        </div>
                     </div>
                 </header>
 
-                {/* Dashboard Content */}
-                <div className="flex-1 overflow-y-auto p-8 space-y-8">
-                    <div>
-                        <h2 className="text-3xl font-bold tracking-tight text-slate-900 font-mono">
-                            {activeTab === 'Overview' ? 'Command Center' :
-                                activeTab === 'Inventory Map' ? 'Regional Intelligence' :
-                                    activeTab === 'Smart Forecast' ? 'Predictive Analytics' :
-                                        activeTab === 'Profile' ? 'Account Authority' : 'System Settings'}
-                        </h2>
-                        <p className="text-slate-500 mt-1">
-                            {activeTab === 'Overview' ? 'Operational status and inventory intelligence dashboard.' :
-                                activeTab === 'Inventory Map' ? 'Geospatial distribution and regional performance metrics.' :
-                                    activeTab === 'Smart Forecast' ? 'AI-powered demand projections and risk assessment.' :
-                                        activeTab === 'Profile' ? 'Administrative identity and security control.' : 'Configure your pulse preferences and system parameters.'}
-                        </p>
+                <div className="flex-1 overflow-y-auto p-10 space-y-10 custom-scrollbar">
+                    {/* View Header */}
+                    <div className="flex justify-between items-end">
+                        <div>
+                            <div className="flex items-center gap-3 mb-2">
+                                <Badge className="bg-indigo-600 text-white rounded-lg px-2 py-0.5 text-[10px] uppercase font-black tracking-widest">v4.0.2 Stable</Badge>
+                                <div className="flex items-center gap-1.5">
+                                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Syncing with Node 14...</span>
+                                </div>
+                            </div>
+                            <h2 className="text-5xl font-black text-slate-900 tracking-tightest">
+                                {activeTab === 'Overview' ? 'Command Center' :
+                                    activeTab === 'Inventory Map' ? 'Regional Intelligence' :
+                                        activeTab === 'Smart Forecast' ? 'Pulse AI Forecast' : 'System Administration'}
+                            </h2>
+                        </div>
+                        <div className="flex gap-4">
+                            <Button
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl h-14 px-8 shadow-2xl shadow-indigo-200 hover:shadow-indigo-300 transition-all active:scale-95 gap-3"
+                                onClick={() => { setEditingItem(null); setIsAddSKUModalOpen(true); }}
+                            >
+                                <Plus className="w-5 h-5" />
+                                Register New SKU
+                            </Button>
+                        </div>
                     </div>
 
-                    {/* Global Search Overlay */}
-                    {searchQuery && (
-                        <div className="animate-in fade-in slide-in-from-top-4 duration-300">
-                            <Card className="border-indigo-200 shadow-2xl bg-white/80 backdrop-blur-xl rounded-3xl overflow-hidden border-2 mb-8">
-                                <CardHeader className="bg-indigo-50/50 border-b border-indigo-100 p-6 flex flex-row items-center justify-between">
-                                    <div>
-                                        <CardTitle className="text-xl font-bold text-indigo-900 flex items-center gap-2">
-                                            <Search className="w-5 h-5" />
-                                            Search Results for "{searchQuery}"
-                                        </CardTitle>
-                                        <p className="text-sm text-indigo-600 font-medium">Found {localInventory.filter((i: InventoryItem) => i.name.toLowerCase().includes(searchQuery.toLowerCase())).length} items across the network</p>
-                                    </div>
-                                    <Button
-                                        variant="ghost"
-                                        onClick={() => setSearchQuery('')}
-                                        className="text-indigo-600 hover:bg-indigo-100 font-bold"
-                                    >
-                                        Clear Search
-                                    </Button>
-                                </CardHeader>
-                                <CardContent className="p-0">
-                                    <div className="max-h-96 overflow-y-auto">
-                                        <table className="w-full text-left">
-                                            <tbody className="divide-y divide-slate-100">
-                                                {localInventory
-                                                    .filter((item: InventoryItem) => item.name.toLowerCase().includes(searchQuery.toLowerCase()) || item.id.toLowerCase().includes(searchQuery.toLowerCase()))
-                                                    .map((item: InventoryItem) => (
-                                                        <tr key={item.id} className="hover:bg-indigo-50/50 transition-colors">
-                                                            <td className="px-8 py-4 font-mono text-xs text-slate-400">{item.id}</td>
-                                                            <td className="px-8 py-4 font-bold text-slate-900">{item.name}</td>
-                                                            <td className="px-8 py-4">
-                                                                <Badge
-                                                                    variant={item.status === 'In Stock' ? 'default' : item.status === 'Low Stock' ? 'secondary' : 'destructive'}
-                                                                >
-                                                                    {item.status} ({item.stock} in stock)
-                                                                </Badge>
-                                                            </td>
-                                                            <td className="px-8 py-4 text-right">
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    className="text-indigo-600 font-bold"
-                                                                    onClick={() => {
-                                                                        setActiveTab('Overview');
-                                                                        setSearchQuery(item.name); // Keep search but focus overview
-                                                                    }}
-                                                                >
-                                                                    View Details
-                                                                </Button>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
-                    )}
-
-                    {/* Dynamic View Rendering */}
-                    {!searchQuery && activeTab === 'Overview' && (
-                        <>
-                            {/* KPI Cards Grid */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {activeTab === 'Overview' && (
+                        <div className="space-y-10 animate-in fade-in duration-700">
+                            {/* Dashboard Metrics */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                                 <KPICard
-                                    title="Total Revenue"
+                                    title="NET REVENUE"
                                     value={`$${(totalRevenue / 1000).toFixed(1)}k`}
-                                    trend={`${revenueTrend > 0 ? '+' : ''}${revenueTrend.toFixed(1)}`}
+                                    trend={`${revenueTrend > 0 ? '+' : ''}${revenueTrend.toFixed(1)}%`}
                                     trendUp={revenueTrend > 0}
-                                    description="Monthly aggregate"
+                                    icon={<Activity className="w-5 h-5" />}
+                                    description="Simulated 30-day velocity"
                                 />
                                 <KPICard
-                                    title="Active Stores"
-                                    value={activeStores}
-                                    trend="+0"
+                                    title="OPERATIONAL HUBS"
+                                    value={activeStoresCount}
+                                    trend="+2"
                                     trendUp={true}
-                                    description="Across 4 regions"
+                                    icon={<MapPin className="w-5 h-5" />}
+                                    description="Global distribution points"
                                 />
                                 <KPICard
-                                    title="Stockout Risk"
+                                    title="STOCKOUT RISK"
                                     value={stockoutRiskCount}
-                                    trend={stockoutRiskCount > 5 ? "High" : "Low"}
+                                    trend={stockoutRiskCount > 5 ? "CRITICAL" : "LOW"}
                                     trendUp={stockoutRiskCount < 5}
-                                    description="Items needing attention"
-                                    variant={stockoutRiskCount > 0 ? "warning" : "default"}
+                                    icon={<AlertTriangle className="w-5 h-5" />}
+                                    description="Click to isolate risks"
+                                    variant={stockoutRiskCount > 5 ? "warning" : "default"}
+                                    onClick={() => setTableFilter('Stockout Risk')}
                                 />
                                 <KPICard
-                                    title="Customer Satisfaction"
+                                    title="CUSTOMER CSAT"
                                     value="94.2%"
-                                    trend="+2.1"
+                                    trend="+0.8"
                                     trendUp={true}
-                                    description="Forecast accuracy"
+                                    icon={<Users className="w-5 h-5" />}
+                                    description="Experience satisfaction"
                                 />
                             </div>
 
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                {/* Performance Chart - Takes 2 columns */}
+                            {/* Center Panel (Analytics & AI Chat) */}
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
                                 <div className="lg:col-span-2">
-                                    <Card className="border-slate-200 shadow-sm overflow-hidden h-full">
-                                        <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 bg-slate-50/50">
-                                            <div>
-                                                <CardTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                                                    Performance Analytics
-                                                    <Badge variant="outline" className="text-[10px] uppercase font-bold text-indigo-500">Source: Real-time State</Badge>
-                                                </CardTitle>
-                                                <p className="text-sm text-slate-500">Revenue vs. Profit trends (Last 30 Days)</p>
-                                            </div>
-                                            <div className="flex items-center gap-6">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
-                                                    <span className="text-xs font-semibold text-slate-600 uppercase tracking-tight">Revenue</span>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                                                    <span className="text-xs font-semibold text-slate-600 uppercase tracking-tight">Profit</span>
-                                                </div>
-                                            </div>
-                                        </CardHeader>
-                                        <CardContent className="pt-6">
-                                            <PerformanceChart data={localSales} />
-                                        </CardContent>
-                                    </Card>
+                                    <PerformanceAnalytics data={localSales} />
                                 </div>
+                                <div className="lg:col-span-1">
+                                    <AIChatHub
+                                        messages={chatMessages}
+                                        input={chatInput}
+                                        setInput={setChatInput}
+                                        onSend={handleSendMessage}
+                                        isLoading={isChatLoading}
+                                        scrollRef={chatEndRef}
+                                    />
+                                </div>
+                            </div>
 
-                                {/* Deep Analytics: Category Share */}
+                            {/* Secondary Layer (Category Distribution & Conversion) */}
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
                                 <div className="lg:col-span-1">
                                     <CategoryDistributionChart inventory={localInventory} />
                                 </div>
-                            </div>
-
-                            {/* Additional Analytics: Visitor Conversion */}
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                <div className="lg:col-span-1">
-                                    <SmartInsightHub
-                                        inventory={localInventory}
-                                        sales={localSales}
-                                        onAction={showActionToast}
-                                    />
-                                </div>
                                 <div className="lg:col-span-2">
-                                    <Card className="border-slate-200 shadow-sm h-full overflow-hidden">
-                                        <CardHeader className="bg-slate-50/50 border-b border-slate-100">
-                                            <CardTitle className="text-lg font-bold">Vistor-to-Sale Conversion</CardTitle>
-                                            <p className="text-sm text-slate-500">Engagement efficiency across electronics categories</p>
+                                    <Card className="border-none shadow-2xl shadow-slate-200/50 rounded-3xl overflow-hidden h-full bg-white">
+                                        <CardHeader className="bg-white border-b border-slate-50 p-8 flex flex-row items-center justify-between">
+                                            <div>
+                                                <CardTitle className="text-2xl font-black italic">Conversion Efficiency</CardTitle>
+                                                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Lifecycle Tracking</p>
+                                            </div>
+                                            <TrendingUp className="w-6 h-6 text-indigo-500" />
                                         </CardHeader>
-                                        <CardContent className="pt-8">
+                                        <CardContent className="p-8">
                                             <ConversionFunnel data={localSales} />
                                         </CardContent>
                                     </Card>
                                 </div>
                             </div>
 
-                            {/* Inventory Intelligence Table */}
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-8">
-                                <div className="lg:col-span-3">
-                                    <Card className="border-slate-200 shadow-sm overflow-hidden h-full">
-                                        <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 bg-slate-50/50">
-                                            <div className="flex items-center gap-4">
-                                                <div>
-                                                    <CardTitle className="text-lg font-bold text-slate-900">Inventory Intelligence</CardTitle>
-                                                    <p className="text-sm text-slate-500">Manage real-time stock and product information</p>
-                                                </div>
-                                                <Button
-                                                    onClick={() => {
-                                                        setEditingItem(null);
-                                                        setIsAddSKUModalOpen(true);
-                                                    }}
-                                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-9 px-4 rounded-lg shadow-lg shadow-indigo-200 transition-all active:scale-95"
-                                                >
-                                                    <Package className="w-4 h-4 mr-2" />
-                                                    Add New SKU
-                                                </Button>
-                                            </div>
-                                        </CardHeader>
-                                        <CardContent className="p-0">
-                                            <div className="overflow-x-auto">
-                                                <table className="w-full text-left border-collapse">
-                                                    <thead>
-                                                        <tr className="bg-slate-50 border-b border-slate-100">
-                                                            <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Internal SKU</th>
-                                                            <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Product Designation</th>
-                                                            <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Stock Availability</th>
-                                                            <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Current Status</th>
-                                                            <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-right">Operations</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y divide-slate-100">
-                                                        {localInventory
-                                                            .filter((item: InventoryItem) => item.name.toLowerCase().includes(searchQuery.toLowerCase()) || item.id.toLowerCase().includes(searchQuery.toLowerCase()))
-                                                            .map((item: InventoryItem) => (
-                                                                <tr key={item.id} className="hover:bg-indigo-50/30 transition-colors group">
-                                                                    <td className="px-6 py-4 font-mono text-xs font-bold text-slate-500">{item.id}</td>
-                                                                    <td className="px-6 py-4">
-                                                                        <div className="flex items-center gap-3">
-                                                                            <div className="w-2 h-2 rounded-full bg-slate-300 group-hover:bg-indigo-500 transition-colors" />
-                                                                            <span className="font-bold text-slate-900">{item.name}</span>
-                                                                        </div>
-                                                                    </td>
-                                                                    <td className="px-6 py-4">
-                                                                        <div className="flex items-center gap-3">
-                                                                            <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                                                                <div
-                                                                                    className={cn(
-                                                                                        "h-full rounded-full transition-all duration-1000",
-                                                                                        item.stock > 50 ? "bg-emerald-500" :
-                                                                                            item.stock > 10 ? "bg-amber-500" : "bg-rose-500"
-                                                                                    )}
-                                                                                    style={{ width: `${Math.min(item.stock, 100)}%` }}
-                                                                                />
-                                                                            </div>
-                                                                            <span className="text-xs font-bold text-slate-600 font-mono">{item.stock}</span>
-                                                                        </div>
-                                                                    </td>
-                                                                    <td className="px-6 py-4">
-                                                                        <Badge
-                                                                            variant={
-                                                                                item.status === 'In Stock' ? 'default' :
-                                                                                    item.status === 'Low Stock' ? 'secondary' : 'destructive'
-                                                                            }
-                                                                            className="shadow-none rounded-full px-3"
-                                                                        >
-                                                                            {item.status}
-                                                                        </Badge>
-                                                                    </td>
-                                                                    <td className="px-6 py-4 text-right">
-                                                                        <div className="flex items-center justify-end gap-2">
-                                                                            {item.status === 'In Stock' ? (
-                                                                                <Button
-                                                                                    variant="ghost"
-                                                                                    size="sm"
-                                                                                    className="h-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 font-bold"
-                                                                                    onClick={() => {
-                                                                                        setEditingItem(item);
-                                                                                        setIsAddSKUModalOpen(true);
-                                                                                    }}
-                                                                                >
-                                                                                    Edit Details
-                                                                                </Button>
-                                                                            ) : (
-                                                                                <Button
-                                                                                    variant="default"
-                                                                                    size="sm"
-                                                                                    disabled={loadingSKU === item.id}
-                                                                                    className="h-8 bg-indigo-600 hover:bg-indigo-700 text-white font-bold min-w-[110px]"
-                                                                                    onClick={() => handleAutoReorder(item.id, item.name)}
-                                                                                >
-                                                                                    {loadingSKU === item.id ? (
-                                                                                        <Loader2 className="w-3 h-3 animate-spin mr-2" />
-                                                                                    ) : null}
-                                                                                    Auto-Reorder
-                                                                                </Button>
-                                                                            )}
-
-                                                                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all ml-2">
-                                                                                <Button
-                                                                                    variant="ghost"
-                                                                                    size="icon"
-                                                                                    className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-white"
-                                                                                    onClick={() => {
-                                                                                        setEditingItem(item);
-                                                                                        setIsAddSKUModalOpen(true);
-                                                                                    }}
-                                                                                >
-                                                                                    <Settings className="w-4 h-4" />
-                                                                                </Button>
-                                                                                <Button
-                                                                                    variant="ghost"
-                                                                                    size="icon"
-                                                                                    className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-white"
-                                                                                    onClick={() => {
-                                                                                        setLocalInventory((prev: InventoryItem[]) => prev.filter((i: InventoryItem) => i.id !== item.id));
-                                                                                        showActionToast(`Successfully removed ${item.name} from inventory.`);
-                                                                                    }}
-                                                                                >
-                                                                                    <AlertTriangle className="w-4 h-4" />
-                                                                                </Button>
-                                                                            </div>
-                                                                        </div>
-                                                                    </td>
-                                                                </tr>
-                                                            ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                </div>
+                            {/* Primary Data Grid */}
+                            <div className="pb-20">
+                                <InventoryTable
+                                    data={sortedInventory}
+                                    onSort={handleSort}
+                                    sortConfig={sortConfig}
+                                    onAction={showActionToast}
+                                />
                             </div>
-                        </>
+                        </div>
                     )}
 
-                    {!searchQuery && activeTab === 'Inventory Map' && (
-                        <StoreManagementView onAction={showActionToast} />
+                    {activeTab === 'Inventory Map' && (
+                        <div className="animate-in fade-in duration-700 h-full pb-20">
+                            <StoreManagementView onAction={showActionToast} />
+                        </div>
                     )}
 
                     {activeTab === 'Smart Forecast' && (
-                        <SmartForecastView onAction={showActionToast} />
+                        <div className="animate-in fade-in duration-700 h-full pb-20">
+                            <SmartForecastView onAction={showActionToast} />
+                        </div>
                     )}
 
                     {activeTab === 'Settings' && (
-                        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-                            {/* Header Section */}
-                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-4">
-                                <div>
-                                    <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
-                                        <Settings className="w-8 h-8 text-indigo-600" />
-                                        Store Administration
-                                    </h3>
-                                    <p className="text-slate-500 font-medium mt-1">Global control panel for RetailPulse flagship operations</p>
-                                </div>
-                                <Button
-                                    onClick={handleSaveChanges}
-                                    disabled={isSaving}
-                                    className="bg-slate-900 text-white font-extrabold rounded-2xl h-14 px-10 min-w-[180px] shadow-2xl shadow-indigo-100 transition-all active:scale-95"
-                                >
-                                    {isSaving ? (
-                                        <>
-                                            <Loader2 className="w-5 h-5 animate-spin mr-3" />
-                                            Saving Config...
-                                        </>
-                                    ) : 'Save Changes'}
-                                </Button>
-                            </div>
-
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                {/* Interface & Security Row */}
-                                <Card className="border-slate-200 shadow-xl rounded-[2.5rem] overflow-hidden bg-white/50 backdrop-blur-xl border-white/40">
-                                    <CardHeader className="bg-slate-50/80 border-b border-slate-100 p-8">
-                                        <CardTitle className="text-xl font-bold flex items-center gap-3 text-slate-800">
-                                            <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center">
-                                                <Zap className="w-5 h-5 text-indigo-600" />
-                                            </div>
-                                            Interface & Visuals
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="p-8 space-y-8">
-                                        <div className="flex items-center justify-between group">
-                                            <div>
-                                                <p className="font-extrabold text-slate-900">Dark Mode (High-Performance)</p>
-                                                <p className="text-sm text-slate-500 font-medium">Invert environment for terminal-style clarity</p>
-                                            </div>
-                                            <div
-                                                onClick={toggleDarkMode}
-                                                className={cn(
-                                                    "w-16 h-8 rounded-full relative p-1.5 cursor-pointer transition-all duration-500 shadow-inner",
-                                                    darkMode ? "bg-indigo-600 ring-4 ring-indigo-50" : "bg-slate-200"
-                                                )}
-                                            >
-                                                <div className={cn(
-                                                    "w-5 h-5 bg-white rounded-full shadow-lg transition-transform duration-500",
-                                                    darkMode ? "translate-x-8" : "translate-x-0"
-                                                )} />
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center justify-between group">
-                                            <div>
-                                                <p className="font-extrabold text-slate-900">Business Alerts</p>
-                                                <p className="text-sm text-slate-500 font-medium">Real-time browser notifications for stockouts</p>
-                                            </div>
-                                            <div
-                                                onClick={handleNotificationToggle}
-                                                className={cn(
-                                                    "w-16 h-8 rounded-full relative p-1.5 cursor-pointer transition-all duration-500 shadow-inner",
-                                                    notificationStatus === 'granted' ? "bg-indigo-600 ring-4 ring-indigo-50" : "bg-slate-200"
-                                                )}
-                                            >
-                                                <div className={cn(
-                                                    "w-5 h-5 bg-white rounded-full shadow-lg transition-transform duration-500",
-                                                    notificationStatus === 'granted' ? "translate-x-8" : "translate-x-0"
-                                                )} />
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-
-                                <Card className="border-slate-200 shadow-xl rounded-[2.5rem] overflow-hidden bg-white/50 backdrop-blur-xl border-white/40">
-                                    <CardHeader className="bg-slate-50/80 border-b border-slate-100 p-8">
-                                        <CardTitle className="text-xl font-bold flex items-center gap-3 text-slate-800">
-                                            <div className="w-10 h-10 bg-rose-50 rounded-2xl flex items-center justify-center">
-                                                <BrainCircuit className="w-5 h-5 text-rose-600" />
-                                            </div>
-                                            Security & Access
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="p-8 space-y-6">
-                                        <Button
-                                            variant="outline"
-                                            onClick={() => setIsSecurityModalOpen(true)}
-                                            className="w-full justify-between h-16 rounded-2xl border-slate-200 hover:bg-slate-50 hover:border-indigo-200 px-6 transition-all font-bold text-slate-700"
-                                        >
-                                            <div className="flex items-center gap-4">
-                                                <Radio className="w-5 h-5 text-indigo-500" />
-                                                Two-Factor Authentication (2FA)
-                                            </div>
-                                            <Badge className="bg-emerald-50 text-emerald-600 border-none font-extrabold uppercase text-[10px]">Active</Badge>
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            onClick={() => setIsSecurityModalOpen(true)}
-                                            className="w-full justify-between h-16 rounded-2xl border-slate-200 hover:bg-slate-50 hover:border-indigo-200 px-6 transition-all font-bold text-slate-700"
-                                        >
-                                            <div className="flex items-center gap-4">
-                                                <Radio className="w-5 h-5 text-indigo-500" />
-                                                Manage Physical Security Keys
-                                            </div>
-                                            <Badge variant="outline" className="border-slate-200 text-slate-400 font-extrabold uppercase text-[10px]">Configured</Badge>
-                                        </Button>
-                                    </CardContent>
-                                </Card>
-                            </div>
-
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                {/* Team & Config Row */}
-                                <Card className="border-slate-200 shadow-xl rounded-[2.5rem] overflow-hidden bg-white/50 backdrop-blur-xl border-white/40">
-                                    <CardHeader className="bg-slate-50/80 border-b border-slate-100 p-8 flex flex-row items-center justify-between">
-                                        <CardTitle className="text-xl font-bold flex items-center gap-3 text-slate-800">
-                                            <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center">
-                                                <Users className="w-5 h-5 text-indigo-600" />
-                                            </div>
-                                            Team Management
-                                        </CardTitle>
-                                        <Button onClick={() => setIsInviteModalOpen(true)} className="bg-indigo-600 text-white font-bold rounded-xl px-4 h-10 shadow-lg shadow-indigo-100">
-                                            <Plus className="w-4 h-4 mr-2" />
-                                            Invite Member
-                                        </Button>
-                                    </CardHeader>
-                                    <CardContent className="p-8">
-                                        <div className="space-y-4">
-                                            {teamMembers.map((member) => (
-                                                <div key={member.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-indigo-200 transition-all">
-                                                    <div className="flex items-center gap-4">
-                                                        <Avatar className="h-10 w-10 border-2 border-white shadow-sm font-bold">
-                                                            <AvatarFallback className="bg-indigo-500 text-white text-xs">{member.avatar}</AvatarFallback>
-                                                        </Avatar>
-                                                        <div>
-                                                            <p className="font-bold text-slate-900">{member.name}</p>
-                                                            <p className="text-xs text-slate-500 font-medium">{member.email}</p>
-                                                        </div>
-                                                    </div>
-                                                    <Badge className="bg-white text-slate-600 border-slate-200 font-bold uppercase text-[9px] tracking-widest">{member.role}</Badge>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </CardContent>
-                                </Card>
-
-                                <Card className="border-slate-200 shadow-xl rounded-[2.5rem] overflow-hidden bg-white/50 backdrop-blur-xl border-white/40">
-                                    <CardHeader className="bg-slate-50/80 border-b border-slate-100 p-8">
-                                        <CardTitle className="text-xl font-bold flex items-center gap-3 text-slate-800">
-                                            <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center">
-                                                <Store className="w-5 h-5 text-indigo-600" />
-                                            </div>
-                                            Store Configuration
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="p-8 grid grid-cols-2 gap-6">
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Store Instance Name</label>
-                                            <input
-                                                value={storeName}
-                                                onChange={(e) => setStoreName(e.target.value)}
-                                                className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Default Currency</label>
-                                            <select
-                                                value={currency}
-                                                onChange={(e) => setCurrency(e.target.value)}
-                                                className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
-                                            >
-                                                <option value="USD">USD ($)</option>
-                                                <option value="EUR">EUR (€)</option>
-                                                <option value="GBP">GBP (£)</option>
-                                            </select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Global Tax Rate (%)</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="number"
-                                                    value={taxRate}
-                                                    onChange={(e) => setTaxRate(Number(e.target.value))}
-                                                    className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
-                                                />
-                                                <Percent className="w-4 h-4 absolute right-4 top-4 text-slate-400" />
-                                            </div>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Operating Window</label>
-                                            <div className="relative">
-                                                <input
-                                                    value={operatingHours}
-                                                    onChange={(e) => setOperatingHours(e.target.value)}
-                                                    className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
-                                                />
-                                                <Clock className="w-4 h-4 absolute right-4 top-4 text-slate-400" />
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            </div>
-
-                            {/* Billing & Subscription Module */}
-                            <div className="space-y-8 mt-12">
-                                <div className="flex items-center gap-3">
-                                    <h4 className="text-2xl font-extrabold text-slate-900 tracking-tight">Billing & Professional Services</h4>
-                                    <div className="h-px bg-slate-200 flex-1" />
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                                    <Card className="md:col-span-2 border-slate-200 shadow-xl rounded-[2.5rem] overflow-hidden bg-white/50 backdrop-blur-xl border-white/40">
-                                        <div className="p-8">
-                                            <div className="flex justify-between items-start mb-8">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="w-14 h-14 bg-indigo-900 text-white rounded-2xl flex items-center justify-center">
-                                                        <Zap className="w-7 h-7" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-xs font-extrabold uppercase tracking-widest text-indigo-500 mb-1">Current Subscription</p>
-                                                        <h5 className="text-2xl font-extrabold text-slate-900">Business Pro Cloud</h5>
-                                                    </div>
-                                                </div>
-                                                <div className="text-right">
-                                                    <p className="text-3xl font-black text-slate-900">$79<span className="text-sm font-bold text-slate-400">/mo</span></p>
-                                                    <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Next Bill: Feb 01, 2026</p>
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-6">
-                                                <div className="space-y-2">
-                                                    <div className="flex justify-between text-xs font-bold uppercase tracking-widest">
-                                                        <span className="text-slate-500">API Usage (Real-Time Flux)</span>
-                                                        <span className="text-indigo-600">75% - 75,000 / 100,000 reqs</span>
-                                                    </div>
-                                                    <div className="h-3 bg-slate-100 rounded-full overflow-hidden p-0.5">
-                                                        <div className="h-full bg-indigo-600 rounded-full w-[75%] shadow-lg shadow-indigo-100 animate-pulse" />
-                                                    </div>
-                                                </div>
-                                                <div className="flex gap-4 pt-2">
-                                                    <Button className="bg-slate-900 text-white font-extrabold rounded-xl h-12 flex-1 shadow-xl hover:bg-slate-800 transition-all">Upgrade Capacity</Button>
-                                                    <Button variant="ghost" className="text-rose-600 font-bold hover:bg-rose-50 rounded-xl h-12 flex-1">Pause Instance</Button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </Card>
-
-                                    <Card className="border-slate-200 shadow-xl rounded-[2.5rem] overflow-hidden bg-white/50 backdrop-blur-xl border-white/40">
-                                        <CardHeader className="p-8 border-b border-slate-100 bg-slate-50/50">
-                                            <CardTitle className="text-lg font-bold flex items-center gap-2">
-                                                <CreditCard className="w-5 h-5 text-indigo-500" />
-                                                Active Payment
-                                            </CardTitle>
-                                        </CardHeader>
-                                        <CardContent className="p-8 flex flex-col justify-between h-full min-h-[220px]">
-                                            <div className="p-6 bg-slate-950 rounded-2xl relative overflow-hidden group shadow-2xl">
-                                                <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 blur-3xl -mr-12 -mt-12 group-hover:scale-150 transition-transform duration-1000" />
-                                                <div className="flex justify-between items-start mb-6">
-                                                    <div className="w-10 h-10 bg-white/10 rounded-lg" />
-                                                    <Radio className="w-4 h-4 text-emerald-400" />
-                                                </div>
-                                                <p className="text-white font-mono text-lg tracking-[0.2em] mb-4">•••• •••• •••• 4242</p>
-                                                <div className="flex justify-between items-end">
-                                                    <div>
-                                                        <p className="text-[8px] uppercase tracking-widest text-slate-500 font-bold">Expiry</p>
-                                                        <p className="text-white text-xs font-bold">12 / 28</p>
-                                                    </div>
-                                                    <CreditCard className="text-white/20 w-8 h-8" />
-                                                </div>
-                                            </div>
-                                            <Button
-                                                onClick={() => setIsPaymentModalOpen(true)}
-                                                className="w-full mt-6 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-none font-extrabold rounded-xl h-11"
-                                            >
-                                                Update Secure Method
-                                            </Button>
-                                        </CardContent>
-                                    </Card>
-
-                                    <Card className="md:col-span-3 border-slate-200 shadow-xl rounded-[2.5rem] overflow-hidden bg-white/50 backdrop-blur-xl border-white/40">
-                                        <CardHeader className="p-8 border-b border-slate-100 bg-slate-50/50 flex flex-row items-center justify-between">
-                                            <div>
-                                                <CardTitle className="text-xl font-bold flex items-center gap-3">
-                                                    <FileText className="w-6 h-6 text-indigo-600" />
-                                                    Administrative Invoice History
-                                                </CardTitle>
-                                            </div>
-                                            <Badge variant="outline" className="font-bold border-slate-200 uppercase text-[10px] tracking-widest">Q1-2026 Verified</Badge>
-                                        </CardHeader>
-                                        <CardContent className="p-0">
-                                            <table className="w-full">
-                                                <thead>
-                                                    <tr className="bg-slate-50 border-b border-slate-100">
-                                                        <th className="text-left px-8 py-4 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Execution Date</th>
-                                                        <th className="text-left px-8 py-4 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Package Amount</th>
-                                                        <th className="text-left px-8 py-4 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Node Status</th>
-                                                        <th className="text-right px-8 py-4 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Terminal Link</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-slate-100">
-                                                    {[
-                                                        { date: "Jan 12, 2026", amount: "$79.00", status: "Paid" },
-                                                        { date: "Dec 12, 2025", amount: "$79.00", status: "Paid" },
-                                                        { date: "Nov 12, 2025", amount: "$79.00", status: "Paid" }
-                                                    ].map((invoice, i) => (
-                                                        <tr key={i} className="hover:bg-indigo-50/30 transition-colors">
-                                                            <td className="px-8 py-5 font-bold text-slate-700">{invoice.date}</td>
-                                                            <td className="px-8 py-5 font-extrabold text-slate-900">{invoice.amount}</td>
-                                                            <td className="px-8 py-5">
-                                                                <Badge className="bg-emerald-50 text-emerald-600 border-none font-extrabold uppercase text-[9px]">Verified: {invoice.status}</Badge>
-                                                            </td>
-                                                            <td className="px-8 py-5 text-right">
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    onClick={() => showActionToast(`Downloading digital invoice: ${invoice.date}.pdf`)}
-                                                                    className="h-9 w-9 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl"
-                                                                >
-                                                                    <Download className="w-4 h-4" />
-                                                                </Button>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </CardContent>
-                                    </Card>
-                                </div>
-                            </div>
+                        <div className="animate-in slide-in-from-bottom-6 duration-700 pb-20">
+                            <SystemSettingsView
+                                onAction={showActionToast}
+                                isSaving={isSaving}
+                                setIsSaving={setIsSaving}
+                                onOpenSecurity={() => setIsSecurityModalOpen(true)}
+                                onOpenInvite={() => setIsInviteModalOpen(true)}
+                                onOpenPayment={() => setIsPaymentModalOpen(true)}
+                            />
                         </div>
                     )}
 
                     {activeTab === 'Profile' && (
-                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <Card className="border-slate-200 shadow-2xl overflow-hidden max-w-3xl rounded-3xl bg-white">
-                                <div className="h-40 bg-gradient-to-r from-indigo-600 to-indigo-900 relative">
-                                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20" />
-                                    <div className="absolute -bottom-16 left-12 flex items-end gap-6">
-                                        <Avatar className="h-32 w-32 border-8 border-white shadow-2xl rounded-3xl">
-                                            <AvatarImage src="https://github.com/shadcn.png" />
-                                            <AvatarFallback className="text-3xl font-bold bg-slate-900 text-white">AD</AvatarFallback>
-                                        </Avatar>
-                                        <div className="mb-4">
-                                            <h2 className="text-3xl font-extrabold text-white drop-shadow-lg">Admin Management</h2>
-                                            <p className="text-indigo-100 font-bold opacity-80 uppercase tracking-widest text-xs">RetailPulse Platform Owner</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <CardContent className="pt-24 px-12 pb-12">
-                                    <div className="flex justify-between items-start mb-12">
-                                        <div>
-                                            <p className="text-slate-500 font-medium mb-1">Authenticated Account Access</p>
-                                            <div className="flex items-center gap-2">
-                                                <Badge className="bg-emerald-50 text-emerald-700 border-emerald-100 font-bold uppercase tracking-tighter shadow-none">Live Status: Verified</Badge>
-                                                <Badge variant="outline" className="font-bold border-slate-200">Owner Access</Badge>
-                                            </div>
-                                        </div>
-                                        <Button className="rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-12 px-8 shadow-xl shadow-indigo-100 transition-all">
-                                            Edit Secure Profile
-                                        </Button>
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                        <div className="space-y-3">
-                                            <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Primary Email Address</label>
-                                            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold text-slate-600 flex items-center justify-between">
-                                                admin@retailpulse.ai
-                                                <Settings className="w-4 h-4 opacity-30" />
-                                            </div>
-                                        </div>
-                                        <div className="space-y-3">
-                                            <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Total Store Capacity</label>
-                                            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold text-slate-600">
-                                                10,000 Product SKUs
-                                            </div>
-                                        </div>
-                                        <div className="space-y-3">
-                                            <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Account Password</label>
-                                            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold text-slate-600 flex items-center justify-between">
-                                                ••••••••••••••••
-                                                <Button variant="ghost" className="h-auto p-0 text-indigo-600 font-bold text-xs uppercase tracking-widest">Change</Button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="mt-16 pt-8 border-t border-slate-100 flex items-center justify-between">
-                                        <div className="flex gap-4">
-                                            <Button className="bg-rose-50 text-rose-600 hover:bg-rose-100 border-none font-bold rounded-xl h-12 px-6">Log Out From Terminal</Button>
-                                            <Button variant="ghost" className="text-slate-400 font-bold hover:text-slate-600 rounded-xl h-12 px-6">Deactivate Store</Button>
-                                        </div>
-                                        <div className="text-[10px] font-bold text-slate-300 uppercase">Version 2.4.0 Alpha Build</div>
-                                    </div>
-                                </CardContent>
-                            </Card>
+                        <div className="animate-in slide-in-from-right-10 duration-700 pb-20">
+                            <ProfileView onAction={showActionToast} />
                         </div>
                     )}
                 </div>
-            </main>
 
-            {/* Security Verification Modal */}
-            {isSecurityModalOpen && (
-                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300 p-4">
-                    <Card className="w-full max-w-sm border-none shadow-2xl rounded-3xl overflow-hidden scale-in-center">
-                        <CardHeader className="bg-indigo-600 text-white p-6">
-                            <CardTitle className="text-xl font-bold flex items-center gap-2">
-                                <Zap className="w-5 h-5" />
-                                Security Verification
-                            </CardTitle>
-                            <p className="text-indigo-100 text-xs mt-1 uppercase tracking-widest font-bold">Standard Internal Protocol</p>
-                        </CardHeader>
-                        <CardContent className="p-6 space-y-4">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Confirm Admin Password</label>
-                                <input
-                                    type="password"
-                                    placeholder="••••••••"
-                                    className="w-full h-11 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
-                                />
-                            </div>
-                            <div className="flex gap-3 pt-2">
-                                <Button
-                                    variant="ghost"
-                                    className="flex-1 h-11 rounded-xl font-bold text-slate-500"
-                                    onClick={() => setIsSecurityModalOpen(false)}
-                                >
-                                    Dismiss
-                                </Button>
-                                <Button
-                                    className="flex-1 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
-                                    onClick={() => {
-                                        setIsSecurityModalOpen(false);
-                                        showActionToast("Verification successful. Access granted.");
-                                    }}
-                                >
-                                    Confirm
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
-
-            {/* Invite Member Modal */}
-            {isInviteModalOpen && (
-                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300 p-4">
-                    <Card className="w-full max-w-md border-none shadow-2xl rounded-3xl overflow-hidden scale-in-center">
-                        <CardHeader className="bg-indigo-600 text-white p-8">
-                            <div className="flex justify-between items-center">
-                                <div>
-                                    <CardTitle className="text-2xl font-black">Invite Team Member</CardTitle>
-                                    <p className="text-indigo-100 text-xs mt-1 uppercase tracking-widest font-bold">Access Control Level: Manager</p>
-                                </div>
-                                <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
-                                    <Users className="w-6 h-6 text-indigo-100" />
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="p-8 space-y-6">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Collaborator Email</label>
-                                <input
-                                    type="email"
-                                    placeholder="name@retailpulse.ai"
-                                    className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Designated Role</label>
-                                <select className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20">
-                                    <option>Store Manager</option>
-                                    <option>Sales Associate</option>
-                                    <option>Inventory Specialist</option>
-                                    <option>Financial Auditor</option>
-                                </select>
-                            </div>
-                            <div className="flex gap-3 pt-4">
-                                <Button
-                                    variant="ghost"
-                                    className="flex-1 h-12 rounded-xl font-bold text-slate-500"
-                                    onClick={() => setIsInviteModalOpen(false)}
-                                >
-                                    Cancel
-                                </Button>
-                                <Button
-                                    className="flex-1 h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-xl shadow-indigo-100"
-                                    onClick={() => {
-                                        setIsInviteModalOpen(false);
-                                        showActionToast("Invitation sent to collaborator inbox.");
-                                    }}
-                                >
-                                    Send Invite
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
-
-            {/* Payment Update Modal */}
-            {isPaymentModalOpen && (
-                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300 p-4">
-                    <Card className="w-full max-w-md border-none shadow-2xl rounded-3xl overflow-hidden scale-in-center">
-                        <CardHeader className="bg-slate-950 text-white p-8">
-                            <div className="flex justify-between items-center">
-                                <div>
-                                    <CardTitle className="text-2xl font-black">Secure Payment Gateway</CardTitle>
-                                    <p className="text-slate-400 text-xs mt-1 uppercase tracking-widest font-bold">PCI DSS COMPLIANT TERMINAL</p>
-                                </div>
-                                <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
-                                    <Lock className="w-6 h-6 text-indigo-400" />
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="p-8 space-y-6">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Cardholder Name</label>
-                                <input
-                                    type="text"
-                                    placeholder="ADMIN NAME"
-                                    className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Card Details</label>
-                                <div className="relative">
-                                    <input
-                                        type="text"
-                                        placeholder="4242 4242 4242 4242"
-                                        className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
-                                    />
-                                    <CreditCard className="w-4 h-4 absolute right-4 top-4 text-slate-300" />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Expiry</label>
-                                    <input
-                                        type="text"
-                                        placeholder="MM / YY"
-                                        className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">CVC</label>
-                                    <input
-                                        type="text"
-                                        placeholder="•••"
-                                        className="w-full h-12 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
-                                    />
-                                </div>
-                            </div>
-                            <div className="flex gap-3 pt-4">
-                                <Button
-                                    variant="ghost"
-                                    className="flex-1 h-12 rounded-xl font-bold text-slate-500"
-                                    onClick={() => setIsPaymentModalOpen(false)}
-                                >
-                                    Dismiss
-                                </Button>
-                                <Button
-                                    className="flex-1 h-12 rounded-xl bg-slate-950 hover:bg-slate-900 text-white font-bold shadow-xl"
-                                    onClick={() => {
-                                        setIsPaymentModalOpen(false);
-                                        showActionToast("Payment profile updated successfully.");
-                                    }}
-                                >
-                                    Update Billing
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
-
-            {/* SKU Management Modal (Add/Edit) */}
-            {isAddSKUModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300 p-4">
-                    <Card className="w-full max-w-md border-none shadow-2xl rounded-3xl overflow-hidden scale-in-center transition-transform">
-                        <CardHeader className="bg-slate-950 text-white p-8">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <CardTitle className="text-2xl font-bold">{editingItem ? 'Update Secure SKU' : 'Register New SKU'}</CardTitle>
-                                    <p className="text-slate-400 text-sm mt-1">{editingItem ? 'Modify existing inventory parameters' : 'Onboard new product to Pulse network'}</p>
-                                </div>
-                                <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
-                                    <Cpu className="w-6 h-6 text-indigo-400" />
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="p-8 bg-white space-y-6">
-                            <form
-                                onSubmit={(e: React.FormEvent<HTMLFormElement>) => {
-                                    e.preventDefault();
-                                    const formData = new FormData(e.currentTarget);
-                                    const name = formData.get('name') as string;
-                                    const stock = parseInt(formData.get('stock') as string);
-                                    const status = stock === 0 ? 'Critical' : stock < 15 ? 'Low Stock' : 'In Stock';
-
-                                    if (editingItem) {
-                                        setLocalInventory((prev: InventoryItem[]) => prev.map((item: InventoryItem) => item.id === editingItem.id ? { ...item, name, stock, status } : item));
-                                        showActionToast(`Successfully updated ${name}`);
-                                    } else {
-                                        const newSKUIntoState: InventoryItem = {
-                                            id: `SKU-${Math.floor(Math.random() * 1000 + 100).toString()}`,
-                                            name,
-                                            stock,
-                                            status
-                                        };
-                                        setLocalInventory((prev: InventoryItem[]) => [newSKUIntoState, ...prev]);
-                                        showActionToast(`Added new product: ${name}`);
-                                    }
-                                    setIsAddSKUModalOpen(false);
-                                    setEditingItem(null);
-                                }}
-                                className="space-y-6"
-                            >
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Product Full Name</label>
-                                    <input
-                                        name="name"
-                                        required
-                                        defaultValue={editingItem?.name}
-                                        placeholder="e.g. Next-Gen Gaming Mouse"
-                                        className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Initial Stock Quantity</label>
-                                    <input
-                                        name="stock"
-                                        type="number"
-                                        required
-                                        defaultValue={editingItem?.stock}
-                                        placeholder="Units available"
-                                        className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
-                                    />
-                                </div>
-                                <div className="flex gap-4 pt-4">
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        onClick={() => {
-                                            setIsAddSKUModalOpen(false);
-                                            setEditingItem(null);
-                                        }}
-                                        className="flex-1 h-12 rounded-2xl font-bold text-slate-500"
-                                    >
-                                        Dismiss
-                                    </Button>
-                                    <Button
-                                        type="submit"
-                                        className="flex-1 h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-xl shadow-indigo-100 transition-all active:scale-95"
-                                    >
-                                        Execute Action
-                                    </Button>
-                                </div>
-                            </form>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
-
-            {/* Global Interaction Toast */}
-            {toast && (
-                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[150] animate-in fade-in slide-in-from-bottom-4 duration-300">
-                    <div className="bg-slate-900 text-white px-6 py-3 rounded-2xl shadow-2xl border border-white/10 flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-                        <span className="text-sm font-bold tracking-tight">{toast.message}</span>
-                    </div>
-                </div>
-            )}
-        </div>
-    )
-}
-
-
-function PerformanceChart({ data }: { data: SaleRecord[] }) {
-    const [hoverIndex, setHoverIndex] = useState<number | null>(null)
-    const height = 320
-    const width = 1000
-    const padding = 50
-
-    const maxRevenue = Math.max(...data.map((d: SaleRecord) => d.revenue))
-    const chartHeight = height - padding * 2
-    const chartWidth = width - padding * 2
-
-    const getPoints = (key: 'revenue' | 'profit') => {
-        return data.map((d: SaleRecord, i: number) => {
-            const x = padding + (i / (data.length - 1)) * chartWidth
-            const y = height - padding - (d[key] / maxRevenue) * chartHeight
-            return `${x},${y}`
-        }).join(' ')
-    }
-
-    const revenuePoints = getPoints('revenue')
-    const profitPoints = getPoints('profit')
-    const revenueAreaPoints = `${revenuePoints} ${padding + chartWidth},${height - padding} ${padding},${height - padding}`
-
-    const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-        const svg = e.currentTarget
-        const rect = svg.getBoundingClientRect()
-        const x = e.clientX - rect.left
-        const ratio = (x - padding) / chartWidth
-        const index = Math.round(ratio * (data.length - 1))
-
-        if (index >= 0 && index < data.length) {
-            setHoverIndex(index)
-        } else {
-            setHoverIndex(null)
-        }
-    }
-
-    return (
-        <div className="w-full relative group/chart">
-            <svg
-                viewBox={`0 0 ${width} ${height}`}
-                className="w-full h-auto overflow-visible select-none"
-                onMouseMove={handleMouseMove}
-                onMouseLeave={() => setHoverIndex(null)}
-            >
-                <defs>
-                    <linearGradient id="revGrad" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="#6366f1" stopOpacity="0.15" />
-                        <stop offset="100%" stopColor="#6366f1" stopOpacity="0.01" />
-                    </linearGradient>
-                </defs>
-
-                {[0, 0.25, 0.5, 0.75, 1].map((p, i) => (
-                    <g key={i}>
-                        <line
-                            x1={padding}
-                            y1={height - padding - p * chartHeight}
-                            x2={width - padding}
-                            y2={height - padding - p * chartHeight}
-                            stroke="#f1f5f9"
-                            strokeWidth="1.5"
-                        />
-                        <text
-                            x={padding - 12}
-                            y={height - padding - p * chartHeight + 4}
-                            textAnchor="end"
-                            className="text-[11px] fill-slate-400 font-bold font-mono"
-                        >
-                            ${Math.floor((p * maxRevenue) / 1000)}k
-                        </text>
-                    </g>
-                ))}
-
-                <polygon points={revenueAreaPoints} fill="url(#revGrad)" />
-                <polyline
-                    fill="none"
-                    stroke="#6366f1"
-                    strokeWidth="4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    points={revenuePoints}
-                />
-                <polyline
-                    fill="none"
-                    stroke="#10b981"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    points={profitPoints}
-                    className="opacity-70"
-                />
-
-                {hoverIndex !== null && (
-                    <g>
-                        <line
-                            x1={padding + (hoverIndex / (data.length - 1)) * chartWidth}
-                            y1={padding}
-                            x2={padding + (hoverIndex / (data.length - 1)) * chartWidth}
-                            y2={height - padding}
-                            stroke="#6366f1"
-                            strokeWidth="2"
-                            strokeDasharray="4 4"
-                        />
-                        <circle
-                            cx={padding + (hoverIndex / (data.length - 1)) * chartWidth}
-                            cy={height - padding - (data[hoverIndex].revenue / maxRevenue) * chartHeight}
-                            r="6"
-                            fill="#6366f1"
-                            stroke="white"
-                            strokeWidth="3"
-                        />
-                        <g transform={`translate(${padding + (hoverIndex / (data.length - 1)) * chartWidth + (hoverIndex > data.length / 2 ? -160 : 20)}, ${height / 2 - 40})`}>
-                            <rect width="140" height="60" rx="12" className="fill-slate-900 shadow-2xl" />
-                            <text x="15" y="25" className="fill-slate-400 text-[10px] font-bold uppercase tracking-wider">{data[hoverIndex].date}</text>
-                            <text x="15" y="45" className="fill-white text-xs font-bold">Revenue: ${(data[hoverIndex].revenue / 1000).toFixed(1)}k</text>
-                        </g>
-                    </g>
+                {/* Common Modals */}
+                {isAddSKUModalOpen && (
+                    <SKUModal
+                        item={editingItem}
+                        onClose={() => setIsAddSKUModalOpen(false)}
+                        onSave={(newItem) => {
+                            if (editingItem) {
+                                setLocalInventory(prev => prev.map(i => i.id === editingItem.id ? newItem : i));
+                                showActionToast(`Updated SKU: ${newItem.id}`);
+                            } else {
+                                setLocalInventory(prev => [newItem, ...prev]);
+                                showActionToast(`Registered New SKU: ${newItem.id}`);
+                            }
+                            setIsAddSKUModalOpen(false);
+                        }}
+                    />
                 )}
-            </svg>
+
+                {isSecurityModalOpen && (
+                    <SecurityModal onClose={() => setIsSecurityModalOpen(false)} onAction={showActionToast} />
+                )}
+
+                {isInviteModalOpen && (
+                    <InviteModal onClose={() => setIsInviteModalOpen(false)} onAction={showActionToast} />
+                )}
+
+                {isPaymentModalOpen && (
+                    <PaymentUpdateModal onClose={() => setIsPaymentModalOpen(false)} onAction={showActionToast} />
+                )}
+
+                {/* Global Notification Toast */}
+                {toast && (
+                    <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-bottom-10 duration-500">
+                        <div className="bg-slate-900/95 backdrop-blur-xl text-white px-8 py-4 rounded-3xl shadow-2xl shadow-indigo-200 border border-white/10 flex items-center gap-4">
+                            <div className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse" />
+                            <span className="text-sm font-black tracking-tight">{toast.message}</span>
+                            <button onClick={() => setToast(null)} className="ml-4 opacity-50 hover:opacity-100 transition-opacity">
+                                <Plus className="w-4 h-4 rotate-45" />
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </main>
         </div>
     )
 }
 
-function SmartInsightHub({
-    inventory,
-    sales,
-    onAction
-}: {
-    inventory: InventoryItem[],
-    sales: SaleRecord[],
-    onAction: (msg: string) => void
-}) {
-    const criticalItems = inventory.filter(item => item.status === 'Critical')
-    const [demandData, setDemandData] = useState<{ region: string, category: string } | null>(null)
-    const [isPulsing, setIsPulsing] = useState(false)
-
-    useEffect(() => {
-        const fetchDemand = async () => {
-            try {
-                const res = await fetch('/api/ai/demand-velocity')
-                const data = await res.json()
-                setDemandData(data)
-                setIsPulsing(true)
-                setTimeout(() => setIsPulsing(false), 2000)
-            } catch (error) {
-                console.error('Failed to fetch demand velocity:', error)
-            }
-        }
-
-        fetchDemand()
-        const interval = setInterval(fetchDemand, 30000)
-        return () => clearInterval(interval)
-    }, [])
-
-    return (
-        <Card className="border-none bg-slate-950 text-white overflow-hidden h-full relative group shadow-2xl">
-            <CardHeader className="relative z-10 border-b border-white/5 pb-4">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <Sparkles className="w-5 h-5 text-indigo-400" />
-                        <CardTitle className="text-lg font-bold">Pulse AI Hub</CardTitle>
-                    </div>
-                </div>
-            </CardHeader>
-            <CardContent className="relative z-10 p-6 space-y-6">
-                <div className="space-y-4">
-                    <div className="p-4 rounded-2xl bg-white/5 border border-white/10 relative overflow-hidden">
-                        <div className="flex items-center gap-3 mb-2">
-                            <Radio className={cn("w-5 h-5 text-indigo-400", isPulsing && "animate-pulse-dot text-rose-400")} />
-                            <span className="text-sm font-bold">Neural Demand Scan</span>
-                        </div>
-                        <p className="text-xs text-slate-400">
-                            Higher velocity detected in <span className="text-white font-bold underline">{demandData?.region || "Scanning..."}</span> for {demandData?.category || "Analyzing Trends..."}.
-                        </p>
-                    </div>
-
-                    <div className="space-y-3">
-                        <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Critical Response</h4>
-                        {criticalItems.slice(0, 2).map((item, i) => (
-                            <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-rose-500/10 border border-rose-500/20">
-                                <div>
-                                    <p className="text-xs font-bold text-white mb-0.5">{item.name}</p>
-                                    <p className="text-[10px] text-rose-400">Out of Stock - Urgent</p>
-                                </div>
-                                <Activity className="w-4 h-4 text-rose-500" />
-                            </div>
-                        ))}
-                    </div>
-                </div>
-                <button
-                    onClick={() => onAction("Activating AI Strategy Advisor...")}
-                    className="w-full flex items-center justify-between p-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 transition-all font-bold group/btn"
-                >
-                    <span className="text-sm">Ask Advisor</span>
-                    <ChevronRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
-                </button>
-            </CardContent>
-        </Card>
-    )
-}
+// --- Sub-Components ---
 
 function NavItem({
     icon,
@@ -1514,13 +547,13 @@ function NavItem({
         <button
             onClick={onClick}
             className={cn(
-                "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all",
+                "w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-sm font-bold transition-all duration-300",
                 active
-                    ? "bg-white/10 text-white shadow-xl shadow-black/20"
+                    ? "bg-indigo-600 text-white shadow-xl shadow-indigo-500/20"
                     : "text-slate-400 hover:text-white hover:bg-white/5"
             )}
         >
-            {React.cloneElement(icon as React.ReactElement, { size: 18 })}
+            {React.cloneElement(icon as React.ReactElement, { size: 20 })}
             {label}
         </button>
     )
@@ -1532,670 +565,228 @@ function KPICard({
     trend,
     trendUp,
     description,
-    variant = "default"
+    icon,
+    variant = "default",
+    onClick
 }: {
     title: string,
     value: string | number,
     trend: string,
     trendUp: boolean,
     description: string,
-    variant?: "default" | "warning" | "danger"
+    icon?: React.ReactNode,
+    variant?: "default" | "warning" | "danger",
+    onClick?: () => void
 }) {
     return (
-        <Card className="border-slate-200 shadow-sm relative group overflow-hidden">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-xs font-bold text-slate-400 uppercase tracking-widest">{title}</CardTitle>
+        <Card
+            className={cn(
+                "border-none shadow-xl shadow-slate-200/50 rounded-3xl overflow-hidden cursor-pointer transition-all hover:scale-[1.02] hover:shadow-2xl relative",
+                onClick && "active:scale-95"
+            )}
+            onClick={onClick}
+        >
+            <CardHeader className="flex flex-row items-center justify-between pb-2 bg-white p-6">
+                <CardTitle className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{title}</CardTitle>
                 <div className={cn(
-                    "text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1",
-                    trendUp ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+                    "p-2.5 rounded-2xl",
+                    variant === 'warning' ? "bg-amber-50 text-amber-500" :
+                        variant === 'danger' ? "bg-rose-50 text-rose-500" : "bg-indigo-50 text-indigo-500"
                 )}>
-                    {trendUp ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
-                    {trend}%
+                    {icon}
                 </div>
             </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-extrabold text-slate-900 mb-1">{value}</div>
-                <p className="text-[10px] text-slate-500 font-medium">{description}</p>
+            <CardContent className="bg-white px-6 pb-6 pt-0">
+                <div className="flex items-end gap-3 mb-2">
+                    <div className="text-3xl font-black text-slate-900 tracking-tightest">{value}</div>
+                    <div className={cn(
+                        "text-[10px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1 mb-1.5",
+                        trendUp ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+                    )}>
+                        {trendUp ? <ArrowUp size={8} /> : <ArrowDown size={8} />}
+                        {trend}
+                    </div>
+                </div>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{description}</p>
             </CardContent>
-            {variant === 'warning' && (
-                <div className="absolute bottom-0 left-0 w-full h-1 bg-amber-500" />
-            )}
+            {variant === 'warning' && <div className="absolute bottom-0 left-0 w-full h-1 bg-amber-500" />}
+            {variant === 'danger' && <div className="absolute bottom-0 left-0 w-full h-1 bg-rose-500" />}
         </Card>
     )
 }
 
-function CategoryDistributionChart({ inventory }: { inventory: InventoryItem[] }) {
-    const categories = ['Audio', 'Computing', 'Mobile', 'Peripherals'];
-    const counts = categories.map(cat => {
-        return inventory.filter((_, i: number) => (i % 4) === categories.indexOf(cat)).length;
-    });
-    const total = counts.reduce((a, b) => a + b, 0);
+function PerformanceAnalytics({ data }: { data: SaleRecord[] }) {
+    return (
+        <Card className="border-none shadow-xl shadow-slate-200/50 rounded-3xl overflow-hidden h-full bg-white">
+            <CardHeader className="bg-white border-b border-slate-50 p-8 flex flex-row items-center justify-between">
+                <div>
+                    <CardTitle className="text-2xl font-black italic">Sales Velocity</CardTitle>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Real-time Performance Monitoring</p>
+                </div>
+                <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
+                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-tight">Revenue</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-tight">Profit</span>
+                    </div>
+                </div>
+            </CardHeader>
+            <CardContent className="h-[400px] p-6">
+                <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={data}>
+                        <defs>
+                            <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1} />
+                                <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                            </linearGradient>
+                            <linearGradient id="colorProf" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.1} />
+                                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                            </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis
+                            dataKey="date"
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
+                            dy={10}
+                        />
+                        <YAxis
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
+                            tickFormatter={(value) => `$${value / 1000}k`}
+                        />
+                        <Tooltip
+                            contentStyle={{
+                                backgroundColor: '#0f172a',
+                                border: 'none',
+                                borderRadius: '12px',
+                                boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)',
+                                color: '#fff'
+                            }}
+                            itemStyle={{ fontWeight: 700, fontSize: '12px' }}
+                        />
+                        <Area type="monotone" dataKey="revenue" stroke="#6366f1" strokeWidth={4} fillOpacity={1} fill="url(#colorRev)" />
+                        <Area type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorProf)" />
+                    </AreaChart>
+                </ResponsiveContainer>
+            </CardContent>
+        </Card>
+    )
+}
+
+function AIChatHub({
+    messages,
+    input,
+    setInput,
+    onSend,
+    isLoading,
+    scrollRef
+}: {
+    messages: ChatMessage[],
+    input: string,
+    setInput: (v: string) => void,
+    onSend: () => void,
+    isLoading: boolean,
+    scrollRef?: React.RefObject<HTMLDivElement>
+}) {
+    return (
+        <Card className="border-none shadow-2xl shadow-slate-200/50 rounded-[2.5rem] overflow-hidden h-full flex flex-col bg-white">
+            <CardHeader className="bg-slate-950 text-white p-8 shrink-0">
+                <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 bg-indigo-600 rounded-3xl flex items-center justify-center animate-pulse shadow-xl shadow-indigo-500/20">
+                        <Sparkles className="w-7 h-7 text-white" />
+                    </div>
+                    <div>
+                        <CardTitle className="text-2xl font-black italic">Pulse AI Advisor</CardTitle>
+                        <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Neural Link Synchronized</span>
+                        </div>
+                    </div>
+                </div>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-y-auto p-8 space-y-6">
+                {messages.map((m) => (
+                    <div key={m.id} className={cn(
+                        "flex flex-col max-w-[90%] animate-in fade-in slide-in-from-bottom-2 duration-300",
+                        m.role === 'user' ? "ml-auto items-end" : "mr-auto items-start"
+                    )}>
+                        <div className={cn(
+                            "px-6 py-4 rounded-3xl text-sm font-bold leading-relaxed shadow-xl",
+                            m.role === 'user'
+                                ? "bg-indigo-600 text-white rounded-tr-none shadow-indigo-100"
+                                : "bg-slate-50 text-slate-800 border border-slate-100 rounded-tl-none shadow-slate-100"
+                        )}>
+                            {m.content}
+                        </div>
+                        <span className="text-[9px] font-black text-slate-400 mt-2 uppercase tracking-tighter">
+                            {m.role === 'user' ? 'Operator Authenticated' : 'Pulse Intelligence Core'} • {m.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                    </div>
+                ))}
+                {isLoading && (
+                    <div className="flex items-center gap-3 text-indigo-600">
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Synthesizing Decision Matrix...</span>
+                    </div>
+                )}
+                <div ref={scrollRef} />
+            </CardContent>
+            <div className="p-6 bg-slate-50 border-t border-slate-100 shrink-0">
+                <div className="relative">
+                    <input
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && onSend()}
+                        placeholder="Inquire about store performance..."
+                        className="w-full h-16 bg-white border border-slate-200 rounded-2xl pl-6 pr-16 text-sm font-bold text-slate-900 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-sm"
+                    />
+                    <Button
+                        size="icon"
+                        onClick={onSend}
+                        disabled={isLoading || !input.trim()}
+                        className="absolute right-2 top-2 h-12 w-12 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-xl shadow-indigo-200 transition-all active:scale-90"
+                    >
+                        <ChevronRight className="w-6 h-6" />
+                    </Button>
+                </div>
+            </div>
+        </Card>
+    )
+}
+
+function CategoryDistributionChart({ data }: { data: SaleRecord[] }) {
+    const categories = [
+        { name: 'Audio', color: 'bg-indigo-500' },
+        { name: 'Computing', color: 'bg-emerald-500' },
+        { name: 'Mobile', color: 'bg-amber-500' },
+        { name: 'Peripherals', color: 'bg-rose-500' }
+    ]
 
     return (
-        <Card className="border-slate-200 shadow-sm h-full">
-            <CardHeader className="bg-slate-50/50 border-b border-slate-100">
-                <CardTitle className="text-lg font-bold">Category Share</CardTitle>
-                <p className="text-sm text-slate-500">Inventory volume by sector</p>
-            </CardHeader>
-            <CardContent className="pt-6 space-y-4">
-                {categories.map((cat, i) => (
-                    <div key={cat} className="space-y-1.5" id={`cat-row-${cat}`}>
-                        <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-slate-500">
-                            <span>{cat}</span>
-                            <span>{total > 0 ? Math.round((counts[i] / total) * 100) : 0}%</span>
+        <Card className="border-none shadow-xl shadow-slate-200/50 rounded-3xl overflow-hidden h-full bg-white p-8">
+            <CardTitle className="text-xl font-black italic mb-6">Category Distribution</CardTitle>
+            <div className="space-y-6">
+                {categories.map((cat) => (
+                    <div key={cat.name} className="space-y-2">
+                        <div className="flex justify-between items-end">
+                            <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{cat.name}</span>
+                            <span className="text-sm font-black text-slate-900">25%</span>
                         </div>
-                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                            <div
-                                className={cn(
-                                    "h-full rounded-full transition-all duration-1000",
-                                    i === 0 ? "bg-indigo-500" : i === 1 ? "bg-emerald-500" : i === 2 ? "bg-amber-500" : "bg-rose-500"
-                                )}
-                                style={{ width: `${total > 0 ? (counts[i] / total) * 100 : 0}%` }}
-                            />
+                        <div className="h-2 w-full bg-slate-50 rounded-full overflow-hidden">
+                            <div className={cn("h-full rounded-full transition-all duration-1000", cat.color)} style={{ width: '25%' }} />
                         </div>
                     </div>
                 ))}
-            </CardContent>
+            </div>
         </Card>
-    );
-}
-
-function ConversionFunnel({ data }: { data: SaleRecord[] }) {
-    const totalVisitors = data.reduce((acc, curr) => acc + curr.visitors, 0);
-    const convertedVisitors = Math.floor(totalVisitors * 0.12);
-
-    return (
-        <div className="flex flex-col gap-6 items-center">
-            <div className="w-full max-w-md space-y-8">
-                <FunnelStep
-                    label="Reach"
-                    value={totalVisitors.toLocaleString()}
-                    sub="Total Unique Visitors"
-                    color="bg-indigo-500"
-                    width="100%"
-                />
-                <FunnelStep
-                    label="Intent"
-                    value={Math.floor(totalVisitors * 0.45).toLocaleString()}
-                    sub="Product View Rate (45%)"
-                    color="bg-indigo-400"
-                    width="75%"
-                />
-                <FunnelStep
-                    label="Sales"
-                    value={convertedVisitors.toLocaleString()}
-                    sub="Checkout Completion (12%)"
-                    color="bg-indigo-600"
-                    width="50%"
-                />
-            </div>
-            <div className="grid grid-cols-3 gap-8 w-full border-t border-slate-100 pt-8">
-                <div className="text-center">
-                    <p className="text-[10px] font-bold uppercase text-slate-400 tracking-widest mb-1">CAC</p>
-                    <p className="text-xl font-extrabold text-slate-900">$14.20</p>
-                </div>
-                <div className="text-center">
-                    <p className="text-[10px] font-bold uppercase text-slate-400 tracking-widest mb-1">ROAS</p>
-                    <p className="text-xl font-extrabold text-emerald-600">4.2x</p>
-                </div>
-                <div className="text-center">
-                    <p className="text-[10px] font-bold uppercase text-slate-400 tracking-widest mb-1">LTV</p>
-                    <p className="text-xl font-extrabold text-slate-900">$210</p>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function SmartForecastView({ onAction }: { onAction: (msg: string) => void }) {
-    const [scenario, setScenario] = useState<'Realistic' | 'Optimistic' | 'Pessimistic'>('Realistic');
-    const [historicalData, setHistoricalData] = useState<{ x: number, y: number }[]>([]);
-    const [projectionData, setProjectionData] = useState<{ x: number, y: number }[]>([]);
-
-    // AI Model Activation State
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [isExporting, setIsExporting] = useState(false);
-    const [showModel, setShowModel] = useState(false);
-
-    useEffect(() => {
-        // Generate 6 months (180 days) of historical data
-        const history = Array.from({ length: 180 }, (_, i) => ({
-            x: i,
-            y: 5000 + Math.random() * 2000 + (i * 15) // Slight upward trend
-        }));
-        setHistoricalData(history);
-
-        // Linear Regression calculation
-        const n = history.length;
-        let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
-        history.forEach(p => {
-            sumX += p.x;
-            sumY += p.y;
-            sumXY += p.x * p.y;
-            sumX2 += p.x * p.x;
-        });
-
-        const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
-        const intercept = (sumY - slope * sumX) / n;
-
-        // Growth multipliers
-        const multipliers = {
-            Optimistic: 1.15,
-            Realistic: 1.0,
-            Pessimistic: 0.85
-        };
-
-        const multiplier = multipliers[scenario];
-
-        // Project next 90 days if in advanced mode, otherwise 30
-        const projectionLength = showModel ? 90 : 30;
-        const totalLength = 180 + projectionLength;
-        const projection = Array.from({ length: projectionLength }, (_, i) => {
-            const x = 180 + i;
-            // For advanced model, use a target growth of 12.4% (multiplier 1.124)
-            const growthFactor = showModel ? 1.124 : multiplier;
-            const y = (slope * x + intercept) * growthFactor;
-            return { x, y };
-        });
-
-        setProjectionData(projection);
-    }, [scenario, showModel]);
-
-    const handleGenerateModel = () => {
-        setIsGenerating(true);
-        setTimeout(() => {
-            setIsGenerating(false);
-            setShowModel(true);
-        }, 2000);
-    };
-
-    const handleExportPDF = () => {
-        setIsExporting(true);
-        setTimeout(() => {
-            const blob = new Blob(["Dummy PDF content for Retail Pulse Q1 Forecast"], { type: 'application/pdf' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'RetailPulse_Q1_Forecast.pdf';
-            a.click();
-            window.URL.revokeObjectURL(url);
-            onAction("Report downloaded successfully.");
-            setIsExporting(false);
-        }, 3000);
-    };
-
-    const width = 1000;
-    const height = 400;
-    const padding = 60;
-    const totalX = showModel ? 270 : 210;
-
-    const allData = [...historicalData, ...projectionData];
-    const maxY = Math.max(...allData.map(d => d.y)) * 1.1;
-    const minY = Math.min(...allData.map(d => d.y)) * 0.9;
-
-    const mapX = (x: number) => padding + (x / totalX) * (width - padding * 2);
-    const mapY = (y: number) => height - padding - ((y - minY) / (maxY - minY)) * (height - padding * 2);
-
-    const historyPoints = historicalData.map(d => `${mapX(d.x)},${mapY(d.y)}`).join(' ');
-    const projectionPoints = projectionData.map(d => `${mapX(d.x)},${mapY(d.y)}`).join(' ');
-
-    // Confidence Area: 98.2% Confidence (±2% margin)
-    const confidenceAreaPoints = (() => {
-        if (!showModel) return "";
-        const upper = projectionData.map(d => `${mapX(d.x)},${mapY(d.y * 1.02)}`);
-        const lower = [...projectionData].reverse().map(d => `${mapX(d.x)},${mapY(d.y * 0.98)}`);
-        return [...upper, ...lower].join(' ');
-    })();
-
-    if (!showModel) {
-        return (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <Card className="border-slate-200 shadow-xl overflow-hidden p-8 bg-indigo-900 text-white relative">
-                    <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 blur-[120px] -mr-48 -mt-48" />
-                    <div className="flex flex-col md:flex-row items-center gap-12 relative z-10">
-                        <div className="flex-1 space-y-6">
-                            <div className="flex items-center gap-3">
-                                <Sparkles className="w-10 h-10 text-amber-400" />
-                                <h2 className="text-4xl font-bold tracking-tight">AI Demand Projections</h2>
-                            </div>
-                            <p className="text-xl text-indigo-100 leading-relaxed font-medium">
-                                Our Pulse AI models have processed the last 30 days of sales data and predicted a
-                                <span className="text-white font-bold mx-2 px-2 py-1 bg-white/10 rounded-lg">12.4% increase</span>
-                                in revenue for the upcoming Q1 retail window.
-                            </p>
-                            <div className="grid grid-cols-2 gap-6 pt-4">
-                                <div className="bg-white/10 p-6 rounded-3xl border border-white/10 backdrop-blur-md">
-                                    <p className="text-xs font-bold uppercase tracking-widest text-indigo-300 mb-2">Confidence Score</p>
-                                    <p className="text-3xl font-bold font-mono text-emerald-400">98.2%</p>
-                                </div>
-                                <div className="bg-white/10 p-6 rounded-3xl border border-white/10 backdrop-blur-md">
-                                    <p className="text-xs font-bold uppercase tracking-widest text-indigo-300 mb-2">Target Growth</p>
-                                    <p className="text-3xl font-bold font-mono text-white">+$142k</p>
-                                </div>
-                            </div>
-                            <Button
-                                onClick={handleGenerateModel}
-                                disabled={isGenerating}
-                                className="w-full bg-white text-indigo-900 hover:bg-indigo-50 font-bold py-8 text-xl rounded-2xl shadow-2xl transition-all active:scale-95 mt-4 group/gen"
-                            >
-                                {isGenerating ? (
-                                    <>
-                                        <Loader2 className="w-6 h-6 animate-spin mr-3" />
-                                        Processing...
-                                    </>
-                                ) : (
-                                    "Generate Full AI Prediction Model"
-                                )}
-                            </Button>
-                        </div>
-                        <div className="w-full md:w-96 aspect-square bg-white/5 rounded-full border border-indigo-400/20 flex items-center justify-center relative overflow-hidden group">
-                            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-transparent animate-pulse" />
-                            <BrainCircuit className="w-56 h-56 text-indigo-300 relative z-10 transition-transform duration-700 group-hover:scale-110" />
-                        </div>
-                    </div>
-                </Card>
-
-                {/* Secondary 'Realistic' View (Visible before full model) */}
-                <Card className="border-slate-200 shadow-xl overflow-hidden p-8 bg-white relative opacity-50 grayscale pointer-events-none">
-                    <p className="text-center font-bold text-slate-400 flex items-center justify-center gap-2">
-                        <Settings className="w-4 h-4" />
-                        Activate Advanced AI Model to Unlock Full Workspace
-                    </p>
-                </Card>
-            </div>
-        );
-    }
-
-    return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <Card className="border-slate-200 shadow-2xl overflow-hidden p-8 bg-white relative">
-                <div className="flex items-center justify-between mb-8">
-                    <div>
-                        <div className="flex items-center gap-2 mb-1">
-                            <Badge className="bg-indigo-600 text-[10px] uppercase tracking-wider">Advanced Model Active</Badge>
-                            <span className="text-xs font-bold text-emerald-600">98.2% Accuracy</span>
-                        </div>
-                        <h3 className="text-3xl font-extrabold text-slate-900 tracking-tight">Q1 Predicted Revenue Velocity</h3>
-                        <p className="text-slate-500 font-medium">90-Day Full Spectrum Forecast (Last 180 Days Baseline)</p>
-                    </div>
-                    <Button variant="ghost" onClick={() => setShowModel(false)} className="text-slate-400 hover:text-slate-600 font-bold">Reset Analysis</Button>
-                </div>
-
-                <div className="relative w-full h-[450px]">
-                    <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
-                        <defs>
-                            <linearGradient id="confGrad" x1="0" x2="0" y1="0" y2="1">
-                                <stop offset="0%" stopColor="#6366f1" stopOpacity="0.05" />
-                                <stop offset="100%" stopColor="#6366f1" stopOpacity="0.05" />
-                            </linearGradient>
-                        </defs>
-
-                        {/* Grid Lines */}
-                        {[0, 0.25, 0.5, 0.75, 1].map((p, i) => (
-                            <g key={i}>
-                                <line
-                                    x1={padding}
-                                    y1={height - padding - p * (height - padding * 2)}
-                                    x2={width - padding}
-                                    y2={height - padding - p * (height - padding * 2)}
-                                    stroke="#f1f5f9"
-                                    strokeWidth="1.5"
-                                />
-                                <text
-                                    x={padding - 12}
-                                    y={height - padding - p * (height - padding * 2) + 4}
-                                    textAnchor="end"
-                                    className="text-[11px] fill-slate-400 font-bold font-mono"
-                                >
-                                    ${Math.floor((minY + p * (maxY - minY)) / 1000)}k
-                                </text>
-                            </g>
-                        ))}
-
-                        {/* Confidence Interval Shaded Area */}
-                        <polygon points={confidenceAreaPoints} fill="url(#confGrad)" className="animate-in fade-in duration-1000" />
-
-                        {/* X-Axis Labels */}
-                        <text x={padding} y={height - padding + 25} className="text-[11px] fill-slate-400 font-bold uppercase tracking-widest">History (-6 Months)</text>
-                        <text x={mapX(180)} y={height - padding + 25} textAnchor="middle" className="text-[11px] fill-indigo-600 font-extrabold uppercase tracking-widest bg-indigo-50">Pulse Baseline</text>
-                        <text x={width - padding} y={height - padding + 25} textAnchor="end" className="text-[11px] fill-slate-400 font-bold uppercase tracking-widest">Q1 Projection (+90d)</text>
-
-                        {/* Historical Line (Solid) */}
-                        <polyline
-                            fill="none"
-                            stroke="#cbd5e1"
-                            strokeWidth="2"
-                            points={historyPoints}
-                        />
-
-                        {/* Projection Line (Dashed) */}
-                        <polyline
-                            fill="none"
-                            stroke="#6366f1"
-                            strokeWidth="4"
-                            strokeDasharray="8 8"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            points={projectionPoints}
-                            className="animate-in slide-in-from-left-full duration-1000"
-                        />
-
-                        {/* Intersection Marker */}
-                        <circle
-                            cx={mapX(180)}
-                            cy={mapY(historicalData[historicalData.length - 1].y)}
-                            r="6"
-                            fill="#6366f1"
-                            stroke="white"
-                            strokeWidth="3"
-                            className="drop-shadow-lg"
-                        />
-                    </svg>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mt-12 border-t border-slate-100 pt-8">
-                    <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                        <p className="text-[10px] font-bold uppercase text-slate-400 tracking-widest mb-2 text-indigo-600">Strategic Driver 01</p>
-                        <p className="font-bold text-slate-900 text-sm mb-1">Seasonal Uptick</p>
-                        <p className="text-xs text-slate-500 leading-relaxed">Historical Q1 performance shows a consistent 8.4% volume surge in home electronics.</p>
-                    </div>
-                    <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                        <p className="text-[10px] font-bold uppercase text-slate-400 tracking-widest mb-2 text-indigo-600">Strategic Driver 02</p>
-                        <p className="font-bold text-slate-900 text-sm mb-1">Competitor Stockout</p>
-                        <p className="text-xs text-slate-500 leading-relaxed">Cross-market scanning detects inventory shortages in 3 primary regional competitors.</p>
-                    </div>
-                    <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                        <p className="text-[10px] font-bold uppercase text-slate-400 tracking-widest mb-2 text-indigo-600">Strategic Driver 03</p>
-                        <p className="font-bold text-slate-900 text-sm mb-1">Stock Optimization</p>
-                        <p className="text-xs text-slate-500 leading-relaxed">New inventory arrival cycles are synchronized with high-velocity demand clusters.</p>
-                    </div>
-                    <div className="bg-emerald-500 p-6 rounded-3xl text-white shadow-xl shadow-emerald-100">
-                        <p className="text-[10px] font-bold uppercase text-emerald-100 tracking-widest mb-2">Growth Metric</p>
-                        <p className="text-3xl font-extrabold">+12.4%</p>
-                        <p className="text-xs font-medium text-emerald-100 leading-relaxed mt-1">Net Revenue Impact</p>
-                    </div>
-                </div>
-                <div className="flex flex-col md:flex-row gap-4 mt-8 pt-8 border-t border-slate-100">
-                    <Button
-                        variant="outline"
-                        onClick={handleExportPDF}
-                        disabled={isExporting}
-                        className="rounded-xl font-bold border-slate-200 text-slate-600 hover:bg-slate-50 h-14 px-8 min-w-[200px]"
-                    >
-                        {isExporting ? (
-                            <>
-                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                                Generating...
-                            </>
-                        ) : (
-                            <>
-                                <Download className="w-4 h-4 mr-2" />
-                                Export PDF Report
-                            </>
-                        )}
-                    </Button>
-                </div>
-            </Card>
-        </div>
-    );
-}
-
-const STATE_COORDINATES: Record<string, [number, number]> = {
-    "AL": [-86.9023, 32.3182], "AK": [-149.4937, 63.5888], "AZ": [-111.0937, 34.0489], "AR": [-92.1999, 34.9697],
-    "CA": [-119.4179, 36.7783], "CO": [-105.7821, 39.5501], "CT": [-72.7273, 41.6032], "DE": [-75.5277, 38.9108],
-    "FL": [-81.5158, 27.6648], "GA": [-82.9001, 32.1656], "HI": [-155.5828, 19.8968], "ID": [-114.7420, 44.0682],
-    "IL": [-89.3985, 40.6331], "IN": [-86.1349, 40.2672], "IA": [-93.0977, 41.8780], "KS": [-98.4842, 39.0119],
-    "KY": [-84.2700, 37.8393], "LA": [-91.9623, 30.9843], "ME": [-69.4455, 45.2538], "MD": [-76.6413, 39.0458],
-    "MA": [-71.3824, 42.4072], "MI": [-84.5361, 44.3148], "MN": [-93.3655, 46.7296], "MS": [-89.3985, 32.3547],
-    "MO": [-91.8318, 37.9643], "MT": [-110.3626, 46.8797], "NE": [-99.9018, 41.1254], "NV": [-116.4194, 38.8026],
-    "NH": [-71.5724, 43.1939], "NJ": [-74.4057, 40.0583], "NM": [-105.8701, 34.5199], "NY": [-75.4999, 43.2994],
-    "NC": [-79.0193, 35.7596], "ND": [-101.0020, 47.5506], "OH": [-82.9071, 40.4173], "OK": [-97.0929, 35.4676],
-    "OR": [-120.5542, 43.8041], "PA": [-77.1945, 41.2033], "RI": [-71.4774, 41.5801], "SC": [-81.1637, 33.8361],
-    "SD": [-99.9018, 44.3106], "TN": [-86.5804, 35.5175], "TX": [-99.9018, 31.9686], "UT": [-111.0937, 39.3210],
-    "VT": [-72.5778, 44.0459], "VA": [-78.6569, 37.4316], "WA": [-120.7401, 47.7511], "WV": [-80.4549, 38.5976],
-    "WI": [-89.6165, 43.7844], "WY": [-107.2903, 43.0760]
-};
-
-interface StoreLocation {
-    id: string;
-    name: string;
-    state: string;
-    revenue: number;
-    coordinates: [number, number];
-}
-
-const geoUrl = "https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json";
-
-function StoreManagementView({ onAction }: { onAction: (msg: string) => void }) {
-    const [stores, setStores] = useState<StoreLocation[]>([]);
-    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-    const [hoveredStore, setHoveredStore] = useState<string | null>(null);
-
-    // Load from localStorage on mount
-    useEffect(() => {
-        const savedStores = localStorage.getItem('retail_pulse_stores');
-        if (savedStores) {
-            setStores(JSON.parse(savedStores));
-        } else {
-            const initialStores: StoreLocation[] = [
-                { id: '1', name: 'New York Flagship', state: 'NY', revenue: 450000, coordinates: [-75.4999, 43.2994] },
-                { id: '2', name: 'Austin Hub', state: 'TX', revenue: 320000, coordinates: [-99.9018, 31.9686] },
-                { id: '3', name: 'Denver Depot', state: 'CO', revenue: 210000, coordinates: [-105.7821, 39.5501] },
-                { id: '4', name: 'Seattle Outpost', state: 'WA', revenue: 280000, coordinates: [-120.7401, 47.7511] }
-            ];
-            setStores(initialStores);
-            localStorage.setItem('retail_pulse_stores', JSON.stringify(initialStores));
-        }
-    }, []);
-
-    const saveStores = (newStores: StoreLocation[]) => {
-        setStores(newStores);
-        localStorage.setItem('retail_pulse_stores', JSON.stringify(newStores));
-    };
-
-    const handleAddStore = (e: React.FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
-        const formData = new FormData(e.currentTarget);
-        const name = formData.get('name') as string;
-        const state = formData.get('state') as string;
-        const revenue = parseInt(formData.get('revenue') as string);
-
-        const coordinates = STATE_COORDINATES[state];
-        if (!coordinates) {
-            onAction("Error: Invalid state coordinate mapping.");
-            return;
-        }
-
-        const newStore: StoreLocation = {
-            id: Math.random().toString(36).substr(2, 9),
-            name,
-            state,
-            revenue,
-            coordinates
-        };
-
-        saveStores([...stores, newStore]);
-        setIsAddModalOpen(false);
-        onAction(`Successfully added ${name} in ${state}`);
-    };
-
-    const handleDeleteStore = (id: string, name: string) => {
-        const updated = stores.filter(s => s.id !== id);
-        saveStores(updated);
-        onAction(`Removed ${name} from network.`);
-    };
-
-    // Insights Calculation
-    const totalNetworkRevenue = stores.reduce((sum, s) => sum + s.revenue, 0);
-    const topPerformer = [...stores].sort((a, b) => b.revenue - a.revenue)[0];
-
-    const regions = {
-        Midwest: ["IL", "IN", "IA", "KS", "MI", "MN", "MO", "NE", "ND", "OH", "SD", "WI"],
-        South: ["AL", "AR", "DE", "FL", "GA", "KY", "LA", "MD", "MS", "NC", "OK", "SC", "TN", "TX", "VA", "WV"],
-        Northeast: ["CT", "ME", "MA", "NH", "NJ", "NY", "PA", "RI", "VT"],
-        West: ["AK", "AZ", "CA", "CO", "HI", "ID", "MT", "NV", "NM", "OR", "UT", "WA", "WY"]
-    };
-
-    const coverageGap = Object.keys(regions).find(region => {
-        const stateList = (regions as any)[region];
-        return !stores.some(s => stateList.includes(s.state));
-    });
-
-    return (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <Card className="border-slate-200 shadow-xl overflow-hidden min-h-[600px] flex flex-col bg-white relative">
-                <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 bg-slate-50/50 p-8">
-                    <div>
-                        <CardTitle className="text-2xl font-bold">Store Management System</CardTitle>
-                        <p className="text-sm text-slate-500 font-medium">Interactive US network tracking & expansion</p>
-                    </div>
-                    <Button
-                        onClick={() => setIsAddModalOpen(true)}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-2xl px-6 h-12 shadow-lg shadow-indigo-100 transition-all active:scale-95 flex items-center gap-2"
-                    >
-                        <Plus className="w-5 h-5" />
-                        Add Location
-                    </Button>
-                </CardHeader>
-
-                <div className="flex-1 relative bg-slate-50 overflow-hidden">
-                    <ComposableMap projection="geoAlbersUsa" className="w-full h-full">
-                        <Geographies geography={geoUrl}>
-                            {({ geographies }) =>
-                                geographies.map((geo) => (
-                                    <Geography
-                                        key={geo.rsmKey}
-                                        geography={geo}
-                                        fill="#EAEAEC"
-                                        stroke="#D6D6DA"
-                                        style={{
-                                            default: { outline: "none" },
-                                            hover: { fill: "#f1f5f9", outline: "none" },
-                                            pressed: { outline: "none" },
-                                        }}
-                                    />
-                                ))
-                            }
-                        </Geographies>
-                        {stores.map((store) => (
-                            <Marker
-                                key={store.id}
-                                coordinates={store.coordinates}
-                                onMouseEnter={() => setHoveredStore(store.id)}
-                                onMouseLeave={() => setHoveredStore(null)}
-                            >
-                                <g className="cursor-pointer transition-all">
-                                    <circle r={8} fill="#6366f1" stroke="#fff" strokeWidth={2} />
-                                    <circle r={12} fill="#6366f1" className="opacity-20 animate-pulse" />
-                                </g>
-                                {hoveredStore === store.id && (
-                                    <Annotation
-                                        subject={store.coordinates}
-                                        dx={-30}
-                                        dy={-30}
-                                        connectorProps={{
-                                            stroke: "#6366f1",
-                                            strokeWidth: 2,
-                                            strokeLinecap: "round"
-                                        }}
-                                    >
-                                        <g>
-                                            <rect x="-80" y="-50" width="160" height="70" rx="12" className="fill-slate-900 shadow-2xl" />
-                                            <text x="0" y="-30" textAnchor="middle" className="fill-white text-[10px] font-bold uppercase">{store.name}</text>
-                                            <text x="0" y="-15" textAnchor="middle" className="fill-indigo-300 text-[12px] font-extrabold">${(store.revenue / 1000).toFixed(0)}k Revenue</text>
-                                            <foreignObject x="-10" y="0" width="20" height="20">
-                                                <button
-                                                    onClick={() => handleDeleteStore(store.id, store.name)}
-                                                    className="w-5 h-5 bg-rose-500 rounded-md flex items-center justify-center text-white hover:bg-rose-600 transition-colors"
-                                                >
-                                                    <Trash2 size={10} />
-                                                </button>
-                                            </foreignObject>
-                                        </g>
-                                    </Annotation>
-                                )}
-                            </Marker>
-                        ))}
-                    </ComposableMap>
-                </div>
-
-                {/* Smart Insights Panel */}
-                <div className="p-8 border-t border-slate-100 bg-white">
-                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-6">Regional Intelligence</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        <div className="p-6 bg-indigo-50 rounded-3xl border border-indigo-100">
-                            <p className="text-[10px] font-bold uppercase text-indigo-400 tracking-widest mb-1">Total Network Revenue</p>
-                            <p className="text-3xl font-extrabold text-indigo-900">${(totalNetworkRevenue / 1000).toFixed(1)}k</p>
-                            <p className="text-[10px] text-indigo-400 font-medium mt-1">Aggregated across {stores.length} locations</p>
-                        </div>
-                        <div className="p-6 bg-emerald-50 rounded-3xl border border-emerald-100">
-                            <p className="text-[10px] font-bold uppercase text-emerald-400 tracking-widest mb-1">Top Performing Location</p>
-                            <p className="text-2xl font-extrabold text-emerald-900">{topPerformer?.name || "N/A"}</p>
-                            <p className="text-[10px] text-emerald-400 font-medium mt-1">${(topPerformer?.revenue / 1000).toFixed(0)}k Projected Revenue</p>
-                        </div>
-                        <div className="p-6 bg-amber-50 rounded-3xl border border-amber-100">
-                            <p className="text-[10px] font-bold uppercase text-amber-500 tracking-widest mb-1">Coverage Gaps</p>
-                            <p className="text-2xl font-extrabold text-amber-700">{coverageGap ? `No presence in ${coverageGap}` : "Full coverage"}</p>
-                            <p className="text-[10px] text-amber-500 font-medium mt-1">Expansion recommended in {coverageGap || "none"}</p>
-                        </div>
-                    </div>
-                </div>
-            </Card>
-
-            {/* Add Store Modal */}
-            {isAddModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300 p-4">
-                    <Card className="w-full max-w-md border-none shadow-2xl rounded-3xl overflow-hidden">
-                        <CardHeader className="bg-indigo-600 text-white p-8">
-                            <CardTitle className="text-2xl font-bold">Add New Location</CardTitle>
-                            <p className="text-indigo-100 text-sm opacity-80 mt-1">Register a new store point on the US map</p>
-                        </CardHeader>
-                        <CardContent className="p-8 bg-white space-y-6">
-                            <form onSubmit={handleAddStore} className="space-y-6">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Store Name</label>
-                                    <input
-                                        name="name"
-                                        required
-                                        className="w-full h-12 px-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-bold"
-                                        placeholder="e.g. Chicago Flagship"
-                                    />
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">State Code</label>
-                                        <select
-                                            name="state"
-                                            required
-                                            className="w-full h-12 px-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-bold"
-                                        >
-                                            {Object.keys(STATE_COORDINATES).sort().map(s => (
-                                                <option key={s} value={s}>{s}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Revenue</label>
-                                        <input
-                                            name="revenue"
-                                            type="number"
-                                            required
-                                            className="w-full h-12 px-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none font-bold"
-                                            placeholder="e.g. 150000"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="flex gap-4 pt-4">
-                                    <Button type="button" variant="ghost" onClick={() => setIsAddModalOpen(false)} className="flex-1 rounded-xl font-bold">Cancel</Button>
-                                    <Button type="submit" className="flex-1 bg-indigo-600 text-white rounded-xl font-bold h-12 shadow-lg shadow-indigo-100">Deploy Location</Button>
-                                </div>
-                            </form>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
-        </div>
-    );
+    )
 }
 
 function FunnelStep({ label, value, sub, color, width }: { label: string, value: string, sub: string, color: string, width: string }) {
@@ -2215,5 +806,253 @@ function FunnelStep({ label, value, sub, color, width }: { label: string, value:
                 <p className="absolute -bottom-6 left-0 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{sub}</p>
             </div>
         </div>
-    );
+    )
+}
+
+function ConversionFunnel({ data }: { data: SaleRecord[] }) {
+    return (
+        <Card className="border-none shadow-xl shadow-slate-200/50 rounded-3xl overflow-hidden h-full bg-white p-8">
+            <CardTitle className="text-xl font-black italic mb-8 text-center">Conversion Funnel</CardTitle>
+            <div className="space-y-12 max-w-md mx-auto">
+                <FunnelStep label="Reach" value="1.2M" sub="Total Impressions" color="bg-slate-900" width="100%" />
+                <FunnelStep label="Intent" value="450k" sub="Product Views" color="bg-indigo-600" width="80%" />
+                <FunnelStep label="Checkouts" value="82k" sub="Cart Addition" color="bg-indigo-500" width="60%" />
+                <FunnelStep label="Sales" value="12.4k" sub="Completed Orders" color="bg-emerald-500" width="40%" />
+            </div>
+        </Card>
+    )
+}
+
+function InventoryItemRow({ item }: { item: InventoryItem }) {
+    const statusConfig = {
+        'In Stock': { color: 'text-emerald-600 bg-emerald-50 border-emerald-100', icon: <CheckCircle2 className="w-3 h-3" /> },
+        'Low Stock': { color: 'text-amber-600 bg-amber-50 border-amber-100', icon: <AlertCircle className="w-3 h-3" /> },
+        'Critical': { color: 'text-rose-600 bg-rose-50 border-rose-100', icon: <XCircle className="w-3 h-3" /> }
+    }
+    const config = statusConfig[item.status]
+
+    return (
+        <tr className="group hover:bg-slate-50/50 transition-colors">
+            <td className="py-6 pl-8">
+                <div>
+                    <div className="text-sm font-black text-slate-900">{item.name}</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter mt-0.5">{item.id}</div>
+                </div>
+            </td>
+            <td className="py-6">
+                <div className="text-sm font-black text-slate-900">{item.stock} Units</div>
+            </td>
+            <td className="py-6">
+                <Badge className={cn("rounded-lg px-3 py-1 border flex items-center gap-1.5 w-fit", config.color)}>
+                    {config.icon}
+                    <span className="text-[10px] uppercase font-black tracking-tight">{item.status}</span>
+                </Badge>
+            </td>
+            <td className="py-6 pr-8 text-right">
+                <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl hover:bg-indigo-50 hover:text-indigo-600">
+                        <Edit3 className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl hover:bg-emerald-50 hover:text-emerald-600">
+                        <RefreshCw className="w-4 h-4" />
+                    </Button>
+                </div>
+            </td>
+        </tr>
+    )
+}
+
+function InventoryTable({
+    inventory,
+    searchQuery,
+    statusFilter
+}: {
+    inventory: InventoryItem[],
+    searchQuery: string,
+    statusFilter: string | null
+}) {
+    const filtered = inventory.filter(p => {
+        const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            p.id.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesFilter = !statusFilter || p.status === statusFilter;
+        return matchesSearch && matchesFilter;
+    });
+
+    return (
+        <Card className="border-none shadow-xl shadow-slate-200/50 rounded-[2.5rem] overflow-hidden bg-white">
+            <table className="w-full text-left border-collapse">
+                <thead>
+                    <tr className="border-b border-slate-50">
+                        <th className="py-6 pl-8 text-[10px] font-black text-slate-400 uppercase tracking-widest">Product Intelligence</th>
+                        <th className="py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Global Stock</th>
+                        <th className="py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Neural Status</th>
+                        <th className="py-6 pr-8 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Control Matrix</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                    {filtered.map((item) => (
+                        <InventoryItemRow key={item.id} item={item} />
+                    ))}
+                    {filtered.length === 0 && (
+                        <tr>
+                            <td colSpan={4} className="py-20 text-center">
+                                <div className="flex flex-col items-center gap-4 text-slate-300">
+                                    <Search className="w-12 h-12 opacity-20" />
+                                    <p className="text-sm font-black uppercase tracking-widest opacity-40">No matching assets in local hub</p>
+                                </div>
+                            </td>
+                        </tr>
+                    )}
+                </tbody>
+            </table>
+        </Card>
+    )
+}
+
+function CategoryDistributionChart({ data }: { data: SaleRecord[] }) {
+    const categories = [
+        { name: 'Audio', color: 'bg-indigo-500' },
+        { name: 'Computing', color: 'bg-emerald-500' },
+        { name: 'Mobile', color: 'bg-amber-500' },
+        { name: 'Peripherals', color: 'bg-rose-500' }
+    ]
+
+    return (
+        <Card className="border-none shadow-xl shadow-slate-200/50 rounded-3xl overflow-hidden h-full bg-white p-8">
+            <CardTitle className="text-xl font-black italic mb-6">Category Distribution</CardTitle>
+            <div className="space-y-6">
+                {categories.map((cat) => (
+                    <div key={cat.name} className="space-y-2">
+                        <div className="flex justify-between items-end">
+                            <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{cat.name}</span>
+                            <span className="text-sm font-black text-slate-900">25%</span>
+                        </div>
+                        <div className="h-2 w-full bg-slate-50 rounded-full overflow-hidden">
+                            <div className={cn("h-full rounded-full transition-all duration-1000", cat.color)} style={{ width: '25%' }} />
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </Card>
+    )
+}
+
+function FunnelStep({ label, value, sub, color, width }: { label: string, value: string, sub: string, color: string, width: string }) {
+    return (
+        <div className="flex items-center gap-6">
+            <div className="w-24 text-right">
+                <p className="text-sm font-extrabold text-slate-900">{label}</p>
+            </div>
+            <div className="flex-1 relative">
+                <div className={cn("h-12 rounded-2xl relative z-10 overflow-hidden shadow-lg", color)} style={{ width }}>
+                    <div className="absolute inset-0 bg-white/10" />
+                    <div className="absolute inset-0 flex items-center justify-between px-6">
+                        <span className="text-white font-extrabold">{value}</span>
+                        <TrendingUp className="w-4 h-4 text-white/40" />
+                    </div>
+                </div>
+                <p className="absolute -bottom-6 left-0 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{sub}</p>
+            </div>
+        </div>
+    )
+}
+
+function ConversionFunnel({ data }: { data: SaleRecord[] }) {
+    return (
+        <Card className="border-none shadow-xl shadow-slate-200/50 rounded-3xl overflow-hidden h-full bg-white p-8">
+            <CardTitle className="text-xl font-black italic mb-8 text-center">Conversion Funnel</CardTitle>
+            <div className="space-y-12 max-w-md mx-auto">
+                <FunnelStep label="Reach" value="1.2M" sub="Total Impressions" color="bg-slate-900" width="100%" />
+                <FunnelStep label="Intent" value="450k" sub="Product Views" color="bg-indigo-600" width="80%" />
+                <FunnelStep label="Checkouts" value="82k" sub="Cart Addition" color="bg-indigo-500" width="60%" />
+                <FunnelStep label="Sales" value="12.4k" sub="Completed Orders" color="bg-emerald-500" width="40%" />
+            </div>
+        </Card>
+    )
+}
+
+function InventoryItemRow({ item }: { item: InventoryItem }) {
+    const statusConfig = {
+        'In Stock': { color: 'text-emerald-600 bg-emerald-50 border-emerald-100', icon: <CheckCircle2 className="w-3 h-3" /> },
+        'Low Stock': { color: 'text-amber-600 bg-amber-50 border-amber-100', icon: <AlertCircle className="w-3 h-3" /> },
+        'Critical': { color: 'text-rose-600 bg-rose-50 border-rose-100', icon: <XCircle className="w-3 h-3" /> }
+    }
+    const config = statusConfig[item.status]
+
+    return (
+        <tr className="group hover:bg-slate-50/50 transition-colors">
+            <td className="py-6 pl-8">
+                <div>
+                    <div className="text-sm font-black text-slate-900">{item.name}</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter mt-0.5">{item.id}</div>
+                </div>
+            </td>
+            <td className="py-6">
+                <div className="text-sm font-black text-slate-900">{item.stock} Units</div>
+            </td>
+            <td className="py-6">
+                <Badge className={cn("rounded-lg px-3 py-1 border flex items-center gap-1.5 w-fit", config.color)}>
+                    {config.icon}
+                    <span className="text-[10px] uppercase font-black tracking-tight">{item.status}</span>
+                </Badge>
+            </td>
+            <td className="py-6 pr-8 text-right">
+                <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl hover:bg-indigo-50 hover:text-indigo-600">
+                        <Edit3 className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl hover:bg-emerald-50 hover:text-emerald-600">
+                        <RefreshCw className="w-4 h-4" />
+                    </Button>
+                </div>
+            </td>
+        </tr>
+    )
+}
+
+function InventoryTable({
+    inventory,
+    searchQuery,
+    statusFilter
+}: {
+    inventory: InventoryItem[],
+    searchQuery: string,
+    statusFilter: string | null
+}) {
+    const filtered = inventory.filter(p => {
+        const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            p.id.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesFilter = !statusFilter || p.status === statusFilter;
+        return matchesSearch && matchesFilter;
+    });
+
+    return (
+        <Card className="border-none shadow-xl shadow-slate-200/50 rounded-[2.5rem] overflow-hidden bg-white">
+            <table className="w-full text-left border-collapse">
+                <thead>
+                    <tr className="border-b border-slate-50">
+                        <th className="py-6 pl-8 text-[10px] font-black text-slate-400 uppercase tracking-widest">Product Intelligence</th>
+                        <th className="py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Global Stock</th>
+                        <th className="py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Neural Status</th>
+                        <th className="py-6 pr-8 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Control Matrix</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                    {filtered.map((item) => (
+                        <InventoryItemRow key={item.id} item={item} />
+                    ))}
+                    {filtered.length === 0 && (
+                        <tr>
+                            <td colSpan={4} className="py-20 text-center">
+                                <div className="flex flex-col items-center gap-4 text-slate-300">
+                                    <Search className="w-12 h-12 opacity-20" />
+                                    <p className="text-sm font-black uppercase tracking-widest opacity-40">No matching assets in local hub</p>
+                                </div>
+                            </td>
+                        </tr>
+                    )}
+                </tbody>
+            </table>
+        </Card>
+    )
 }
