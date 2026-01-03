@@ -22,7 +22,8 @@ import {
     ChevronRight,
     MessageSquare,
     Radio,
-    Loader2
+    Loader2,
+    Download
 } from "lucide-react"
 import {
     Card,
@@ -577,7 +578,7 @@ export default function DashboardPage() {
                     )}
 
                     {activeTab === 'Smart Forecast' && (
-                        <SmartForecastView />
+                        <SmartForecastView onAction={showActionToast} />
                     )}
 
                     {activeTab === 'Settings' && (
@@ -1235,7 +1236,7 @@ function ConversionFunnel({ data }: { data: SaleRecord[] }) {
     );
 }
 
-function SmartForecastView() {
+function SmartForecastView({ onAction }: { onAction: (msg: string) => void }) {
     const [scenario, setScenario] = useState<'Realistic' | 'Optimistic' | 'Pessimistic'>('Realistic');
     const [historicalData, setHistoricalData] = useState<{ x: number, y: number }[]>([]);
     const [projectionData, setProjectionData] = useState<{ x: number, y: number }[]>([]);
@@ -1307,7 +1308,7 @@ function SmartForecastView() {
             a.download = 'RetailPulse_Q1_Forecast.pdf';
             a.click();
             window.URL.revokeObjectURL(url);
-            showActionToast("Report downloaded successfully.");
+            onAction("Report downloaded successfully.");
             setIsExporting(false);
         }, 3000);
     };
