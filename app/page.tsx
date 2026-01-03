@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react"
 import { RevenueChart } from "@/components/RevenueChart"
+import { GeminiInsight } from "@/components/GeminiInsight"
 import {
     Activity,
     LayoutDashboard,
@@ -413,15 +414,8 @@ export default function DashboardPage() {
                                         <RevenueChart />
                                     </Card>
                                 </div>
-                                <div className="lg:col-span-1">
-                                    <AIChatHub
-                                        messages={chatMessages}
-                                        input={chatInput}
-                                        setInput={setChatInput}
-                                        onSend={handleSendMessage}
-                                        isLoading={isChatLoading}
-                                        scrollRef={chatEndRef}
-                                    />
+                                <div className="lg:col-span-1 h-[400px]">
+                                    <GeminiInsight />
                                 </div>
                             </div>
 
