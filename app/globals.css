@@ -3,20 +3,29 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 2, 6, 23;
-  --background-end-rgb: 2, 6, 23;
+  --background-rgb: 248, 250, 252;
+  --foreground-rgb: 15, 23, 42;
+  --card-bg: 255, 255, 255;
+  --accent-blue: 99, 102, 241;
+}
+
+.dark-theme {
+  --background-rgb: 2, 6, 23;
+  --foreground-rgb: 248, 250, 252;
+  --card-bg: 15, 23, 42;
 }
 
 body {
   color: rgb(var(--foreground-rgb));
-  background: rgb(var(--background-start-rgb));
+  background: rgb(var(--background-rgb));
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
+
   .glass {
     @apply bg-white/5 backdrop-blur-lg border border-white/10;
   }

@@ -65,6 +65,65 @@ export default function DashboardPage() {
     const [selectedRegion, setSelectedRegion] = useState<RegionData | null>(null);
     const [loadingSKU, setLoadingSKU] = useState<string | null>(null);
 
+    // Settings State
+    const [darkMode, setDarkMode] = useState<boolean>(false);
+    const [notificationStatus, setNotificationStatus] = useState<'default' | 'granted' | 'denied' | 'unsupported'>('default');
+    const [isSaving, setIsSaving] = useState(false);
+    const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+
+    // Theme Persistence Effect
+    useEffect(() => {
+        const savedTheme = localStorage.getItem('retailpulse-theme');
+        if (savedTheme === 'dark') {
+            setDarkMode(true);
+            document.body.classList.add('dark-theme');
+        } else if (savedTheme === 'light') {
+            document.body.classList.remove('dark-theme');
+        } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            setDarkMode(true);
+            document.body.classList.add('dark-theme');
+        }
+    }, []);
+
+    // Dark Mode Toggle Logic
+    const toggleDarkMode = () => {
+        const nextMode = !darkMode;
+        setDarkMode(nextMode);
+        if (nextMode) {
+            document.body.classList.add('dark-theme');
+            localStorage.setItem('retailpulse-theme', 'dark');
+        } else {
+            document.body.classList.remove('dark-theme');
+            localStorage.setItem('retailpulse-theme', 'light');
+        }
+    };
+
+    // Notification Logic
+    const handleNotificationToggle = async () => {
+        if (!('Notification' in window)) {
+            setNotificationStatus('unsupported');
+            showActionToast('Browser does not support notifications.');
+            return;
+        }
+
+        const permission = await Notification.requestPermission();
+        setNotificationStatus(permission);
+        if (permission === 'granted') {
+            showActionToast('Alerts enabled for critical inventory levels.');
+        } else {
+            showActionToast('Notifications currently restricted.');
+        }
+    };
+
+    // Save Changes Handler
+    const handleSaveChanges = async () => {
+        setIsSaving(true);
+        // Simulate network latency
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        setIsSaving(false);
+        setToast({ message: 'Settings Updated Successfully', type: 'success' });
+    };
+
     const handleAutoReorder = async (sku: string, productName: string) => {
         setLoadingSKU(sku);
         try {
@@ -545,7 +604,18 @@ export default function DashboardPage() {
                                     <h3 className="text-2xl font-bold text-slate-900">System Preferences</h3>
                                     <p className="text-slate-500">Configure your dashboard environment and security</p>
                                 </div>
-                                <Button className="bg-slate-900 text-white font-bold rounded-xl px-6">Save Changes</Button>
+                                <Button
+                                    onClick={handleSaveChanges}
+                                    disabled={isSaving}
+                                    className="bg-slate-900 text-white font-bold rounded-xl px-6 min-w-[140px]"
+                                >
+                                    {isSaving ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                            Saving...
+                                        </>
+                                    ) : 'Save Changes'}
+                                </Button>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <Card className="border-slate-200 shadow-sm rounded-3xl overflow-hidden">
@@ -561,8 +631,17 @@ export default function DashboardPage() {
                                                 <p className="font-bold text-slate-900">Dark Mode (Experimental)</p>
                                                 <p className="text-sm text-slate-500">Enable high-performance dark theme</p>
                                             </div>
-                                            <div className="w-14 h-7 bg-slate-200 rounded-full relative p-1 cursor-not-allowed">
-                                                <div className="w-5 h-5 bg-white rounded-full shadow-md" />
+                                            <div
+                                                onClick={toggleDarkMode}
+                                                className={cn(
+                                                    "w-14 h-7 rounded-full relative p-1 cursor-pointer transition-colors duration-300",
+                                                    darkMode ? "bg-indigo-600" : "bg-slate-200"
+                                                )}
+                                            >
+                                                <div className={cn(
+                                                    "w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-300",
+                                                    darkMode ? "translate-x-7" : "translate-x-0"
+                                                )} />
                                             </div>
                                         </div>
                                         <div className="flex items-center justify-between">
@@ -570,8 +649,17 @@ export default function DashboardPage() {
                                                 <p className="font-bold text-slate-900">Push Notifications</p>
                                                 <p className="text-sm text-slate-500">Browser alerts for critical stockouts</p>
                                             </div>
-                                            <div className="w-14 h-7 bg-indigo-600 rounded-full relative p-1 cursor-pointer">
-                                                <div className="w-5 h-5 bg-white rounded-full shadow-md translate-x-7" />
+                                            <div
+                                                onClick={handleNotificationToggle}
+                                                className={cn(
+                                                    "w-14 h-7 rounded-full relative p-1 cursor-pointer transition-colors duration-300",
+                                                    notificationStatus === 'granted' ? "bg-indigo-600" : "bg-slate-200"
+                                                )}
+                                            >
+                                                <div className={cn(
+                                                    "w-5 h-5 bg-white rounded-full shadow-md transition-transform duration-300",
+                                                    notificationStatus === 'granted' ? "translate-x-7" : "translate-x-0"
+                                                )} />
                                             </div>
                                         </div>
                                     </CardContent>
@@ -584,11 +672,19 @@ export default function DashboardPage() {
                                         </CardTitle>
                                     </CardHeader>
                                     <CardContent className="p-8 space-y-6">
-                                        <Button variant="outline" className="w-full justify-start h-14 rounded-2xl border-slate-200 hover:bg-slate-50 transition-colors font-bold text-slate-700">
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => setIsSecurityModalOpen(true)}
+                                            className="w-full justify-start h-14 rounded-2xl border-slate-200 hover:bg-slate-50 transition-colors font-bold text-slate-700"
+                                        >
                                             <ArrowUpRight className="w-4 h-4 mr-3 text-indigo-500" />
                                             Two-Factor Authentication (2FA)
                                         </Button>
-                                        <Button variant="outline" className="w-full justify-start h-14 rounded-2xl border-slate-200 hover:bg-slate-50 transition-colors font-bold text-slate-700">
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => setIsSecurityModalOpen(true)}
+                                            className="w-full justify-start h-14 rounded-2xl border-slate-200 hover:bg-slate-50 transition-colors font-bold text-slate-700"
+                                        >
                                             <Bell className="w-4 h-4 mr-3 text-indigo-500" />
                                             Manage Security Keys
                                         </Button>
@@ -662,6 +758,49 @@ export default function DashboardPage() {
                     )}
                 </div>
             </main>
+
+            {/* Security Verification Modal */}
+            {isSecurityModalOpen && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300 p-4">
+                    <Card className="w-full max-w-sm border-none shadow-2xl rounded-3xl overflow-hidden scale-in-center">
+                        <CardHeader className="bg-indigo-600 text-white p-6">
+                            <CardTitle className="text-xl font-bold flex items-center gap-2">
+                                <Zap className="w-5 h-5" />
+                                Security Verification
+                            </CardTitle>
+                            <p className="text-indigo-100 text-xs mt-1 uppercase tracking-widest font-bold">Standard Internal Protocol</p>
+                        </CardHeader>
+                        <CardContent className="p-6 space-y-4">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Confirm Admin Password</label>
+                                <input
+                                    type="password"
+                                    placeholder="••••••••"
+                                    className="w-full h-11 bg-slate-50 border border-slate-100 rounded-xl px-4 font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                />
+                            </div>
+                            <div className="flex gap-3 pt-2">
+                                <Button
+                                    variant="ghost"
+                                    className="flex-1 h-11 rounded-xl font-bold text-slate-500"
+                                    onClick={() => setIsSecurityModalOpen(false)}
+                                >
+                                    Dismiss
+                                </Button>
+                                <Button
+                                    className="flex-1 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+                                    onClick={() => {
+                                        setIsSecurityModalOpen(false);
+                                        showActionToast("Verification successful. Access granted.");
+                                    }}
+                                >
+                                    Confirm
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
 
             {/* SKU Management Modal (Add/Edit) */}
             {isAddSKUModalOpen && (
