@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef } from "react"
+import { RevenueChart } from "@/components/RevenueChart"
 import {
     Activity,
     LayoutDashboard,
@@ -41,7 +42,11 @@ import {
     ChevronDown,
     Edit3,
     ArrowUp,
-    ArrowDown
+    ArrowDown,
+    CheckCircle2,
+    XCircle,
+    AlertCircle,
+    RefreshCw
 } from "lucide-react"
 import {
     ComposableMap,
@@ -404,7 +409,7 @@ export default function DashboardPage() {
                             {/* Center Panel (Analytics & AI Chat) */}
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
                                 <div className="lg:col-span-2">
-                                    <PerformanceAnalytics data={localSales} />
+                                    <RevenueChart />
                                 </div>
                                 <div className="lg:col-span-1">
                                     <AIChatHub
@@ -433,7 +438,7 @@ export default function DashboardPage() {
                                             <TrendingUp className="w-6 h-6 text-indigo-500" />
                                         </CardHeader>
                                         <CardContent className="p-8">
-                                            <ConversionFunnel data={localSales} />
+                                            <RevenueChart />
                                         </CardContent>
                                     </Card>
                                 </div>
@@ -652,7 +657,7 @@ function PerformanceAnalytics({ data }: { data: SaleRecord[] }) {
                             dataKey="date"
                             axisLine={false}
                             tickLine={false}
-                            tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
+                            tick={{ fill: '#94a3b_8', fontSize: 10, fontWeight: 700 }}
                             dy={10}
                         />
                         <YAxis
@@ -789,153 +794,6 @@ function CategoryDistributionChart({ data }: { data: SaleRecord[] }) {
     )
 }
 
-function FunnelStep({ label, value, sub, color, width }: { label: string, value: string, sub: string, color: string, width: string }) {
-    return (
-        <div className="flex items-center gap-6">
-            <div className="w-24 text-right">
-                <p className="text-sm font-extrabold text-slate-900">{label}</p>
-            </div>
-            <div className="flex-1 relative">
-                <div className={cn("h-12 rounded-2xl relative z-10 overflow-hidden shadow-lg", color)} style={{ width }}>
-                    <div className="absolute inset-0 bg-white/10" />
-                    <div className="absolute inset-0 flex items-center justify-between px-6">
-                        <span className="text-white font-extrabold">{value}</span>
-                        <TrendingUp className="w-4 h-4 text-white/40" />
-                    </div>
-                </div>
-                <p className="absolute -bottom-6 left-0 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{sub}</p>
-            </div>
-        </div>
-    )
-}
-
-function ConversionFunnel({ data }: { data: SaleRecord[] }) {
-    return (
-        <Card className="border-none shadow-xl shadow-slate-200/50 rounded-3xl overflow-hidden h-full bg-white p-8">
-            <CardTitle className="text-xl font-black italic mb-8 text-center">Conversion Funnel</CardTitle>
-            <div className="space-y-12 max-w-md mx-auto">
-                <FunnelStep label="Reach" value="1.2M" sub="Total Impressions" color="bg-slate-900" width="100%" />
-                <FunnelStep label="Intent" value="450k" sub="Product Views" color="bg-indigo-600" width="80%" />
-                <FunnelStep label="Checkouts" value="82k" sub="Cart Addition" color="bg-indigo-500" width="60%" />
-                <FunnelStep label="Sales" value="12.4k" sub="Completed Orders" color="bg-emerald-500" width="40%" />
-            </div>
-        </Card>
-    )
-}
-
-function InventoryItemRow({ item }: { item: InventoryItem }) {
-    const statusConfig = {
-        'In Stock': { color: 'text-emerald-600 bg-emerald-50 border-emerald-100', icon: <CheckCircle2 className="w-3 h-3" /> },
-        'Low Stock': { color: 'text-amber-600 bg-amber-50 border-amber-100', icon: <AlertCircle className="w-3 h-3" /> },
-        'Critical': { color: 'text-rose-600 bg-rose-50 border-rose-100', icon: <XCircle className="w-3 h-3" /> }
-    }
-    const config = statusConfig[item.status]
-
-    return (
-        <tr className="group hover:bg-slate-50/50 transition-colors">
-            <td className="py-6 pl-8">
-                <div>
-                    <div className="text-sm font-black text-slate-900">{item.name}</div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter mt-0.5">{item.id}</div>
-                </div>
-            </td>
-            <td className="py-6">
-                <div className="text-sm font-black text-slate-900">{item.stock} Units</div>
-            </td>
-            <td className="py-6">
-                <Badge className={cn("rounded-lg px-3 py-1 border flex items-center gap-1.5 w-fit", config.color)}>
-                    {config.icon}
-                    <span className="text-[10px] uppercase font-black tracking-tight">{item.status}</span>
-                </Badge>
-            </td>
-            <td className="py-6 pr-8 text-right">
-                <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl hover:bg-indigo-50 hover:text-indigo-600">
-                        <Edit3 className="w-4 h-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl hover:bg-emerald-50 hover:text-emerald-600">
-                        <RefreshCw className="w-4 h-4" />
-                    </Button>
-                </div>
-            </td>
-        </tr>
-    )
-}
-
-function InventoryTable({
-    inventory,
-    searchQuery,
-    statusFilter
-}: {
-    inventory: InventoryItem[],
-    searchQuery: string,
-    statusFilter: string | null
-}) {
-    const filtered = inventory.filter(p => {
-        const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            p.id.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesFilter = !statusFilter || p.status === statusFilter;
-        return matchesSearch && matchesFilter;
-    });
-
-    return (
-        <Card className="border-none shadow-xl shadow-slate-200/50 rounded-[2.5rem] overflow-hidden bg-white">
-            <table className="w-full text-left border-collapse">
-                <thead>
-                    <tr className="border-b border-slate-50">
-                        <th className="py-6 pl-8 text-[10px] font-black text-slate-400 uppercase tracking-widest">Product Intelligence</th>
-                        <th className="py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Global Stock</th>
-                        <th className="py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Neural Status</th>
-                        <th className="py-6 pr-8 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Control Matrix</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                    {filtered.map((item) => (
-                        <InventoryItemRow key={item.id} item={item} />
-                    ))}
-                    {filtered.length === 0 && (
-                        <tr>
-                            <td colSpan={4} className="py-20 text-center">
-                                <div className="flex flex-col items-center gap-4 text-slate-300">
-                                    <Search className="w-12 h-12 opacity-20" />
-                                    <p className="text-sm font-black uppercase tracking-widest opacity-40">No matching assets in local hub</p>
-                                </div>
-                            </td>
-                        </tr>
-                    )}
-                </tbody>
-            </table>
-        </Card>
-    )
-}
-
-function CategoryDistributionChart({ data }: { data: SaleRecord[] }) {
-    const categories = [
-        { name: 'Audio', color: 'bg-indigo-500' },
-        { name: 'Computing', color: 'bg-emerald-500' },
-        { name: 'Mobile', color: 'bg-amber-500' },
-        { name: 'Peripherals', color: 'bg-rose-500' }
-    ]
-
-    return (
-        <Card className="border-none shadow-xl shadow-slate-200/50 rounded-3xl overflow-hidden h-full bg-white p-8">
-            <CardTitle className="text-xl font-black italic mb-6">Category Distribution</CardTitle>
-            <div className="space-y-6">
-                {categories.map((cat) => (
-                    <div key={cat.name} className="space-y-2">
-                        <div className="flex justify-between items-end">
-                            <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{cat.name}</span>
-                            <span className="text-sm font-black text-slate-900">25%</span>
-                        </div>
-                        <div className="h-2 w-full bg-slate-50 rounded-full overflow-hidden">
-                            <div className={cn("h-full rounded-full transition-all duration-1000", cat.color)} style={{ width: '25%' }} />
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </Card>
-    )
-}
 
 function FunnelStep({ label, value, sub, color, width }: { label: string, value: string, sub: string, color: string, width: string }) {
     return (
@@ -1054,5 +912,153 @@ function InventoryTable({
                 </tbody>
             </table>
         </Card>
+    )
+}
+
+function StoreManagementView({ onAction }: { onAction: (msg: string) => void }) {
+    return (
+        <Card className="border-none shadow-xl shadow-slate-200/50 rounded-[2.5rem] overflow-hidden bg-white h-[600px] flex items-center justify-center">
+            <div className="text-center space-y-4">
+                <MapPin className="w-16 h-16 text-slate-200 mx-auto" />
+                <h3 className="text-xl font-black text-slate-900">Regional Intelligence Map</h3>
+                <p className="text-slate-400 font-bold">Geospatial data visualization module active</p>
+                <Button onClick={() => onAction("Map Interaction")} variant="outline">
+                    Explore Regions
+                </Button>
+            </div>
+        </Card>
+    )
+}
+
+function SmartForecastView({ onAction }: { onAction: (msg: string) => void }) {
+    return (
+        <Card className="border-none shadow-xl shadow-slate-200/50 rounded-[2.5rem] overflow-hidden bg-white h-[600px] flex items-center justify-center">
+            <div className="text-center space-y-4">
+                <BrainCircuit className="w-16 h-16 text-slate-200 mx-auto" />
+                <h3 className="text-xl font-black text-slate-900">Neural Forecast Engine</h3>
+                <p className="text-slate-400 font-bold">Predictive modeling in progress</p>
+                <Button onClick={() => onAction("Forecast Generated")} className="bg-indigo-600 text-white">
+                    Run Simulation
+                </Button>
+            </div>
+        </Card>
+    )
+}
+
+function SystemSettingsView({ onAction, isSaving, setIsSaving, onOpenSecurity, onOpenInvite, onOpenPayment }: any) {
+    return (
+        <Card className="border-none shadow-xl shadow-slate-200/50 rounded-[2.5rem] overflow-hidden bg-white p-10">
+            <h3 className="text-2xl font-black text-slate-900 mb-8">System Configuration</h3>
+            <div className="grid gap-6 max-w-2xl">
+                <div className="flex items-center justify-between p-6 border border-slate-100 rounded-2xl">
+                    <div className="flex items-center gap-4">
+                        <Lock className="w-6 h-6 text-slate-400" />
+                        <div>
+                            <p className="font-bold text-slate-900">Security Protocol</p>
+                            <p className="text-xs text-slate-400 font-bold">2FA & Access Keys</p>
+                        </div>
+                    </div>
+                    <Button variant="outline" onClick={onOpenSecurity}>Configure</Button>
+                </div>
+                <div className="flex items-center justify-between p-6 border border-slate-100 rounded-2xl">
+                    <div className="flex items-center gap-4">
+                        <Users className="w-6 h-6 text-slate-400" />
+                        <div>
+                            <p className="font-bold text-slate-900">Team Access</p>
+                            <p className="text-xs text-slate-400 font-bold">Manage Roles</p>
+                        </div>
+                    </div>
+                    <Button variant="outline" onClick={onOpenInvite}>Invite</Button>
+                </div>
+                <div className="flex items-center justify-between p-6 border border-slate-100 rounded-2xl">
+                    <div className="flex items-center gap-4">
+                        <CreditCard className="w-6 h-6 text-slate-400" />
+                        <div>
+                            <p className="font-bold text-slate-900">Billing Matrix</p>
+                            <p className="text-xs text-slate-400 font-bold">Payment Methods</p>
+                        </div>
+                    </div>
+                    <Button variant="outline" onClick={onOpenPayment}>Update</Button>
+                </div>
+            </div>
+        </Card>
+    )
+}
+
+function ProfileView({ onAction }: { onAction: (msg: string) => void }) {
+    return (
+        <Card className="border-none shadow-xl shadow-slate-200/50 rounded-[2.5rem] overflow-hidden bg-white p-10">
+            <div className="flex items-center gap-6 mb-8">
+                <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center">
+                    <span className="text-2xl font-black text-slate-300">AD</span>
+                </div>
+                <div>
+                    <h3 className="text-2xl font-black text-slate-900">Admin User</h3>
+                    <p className="text-slate-400 font-bold">admin@retailpulse.com</p>
+                </div>
+            </div>
+        </Card>
+    )
+}
+
+function SKUModal({ item, onClose, onSave }: any) {
+    const [formData, setFormData] = useState(item || { id: '', name: '', stock: 0, status: 'In Stock' })
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <Card className="w-full max-w-md bg-white p-6 rounded-3xl">
+                <h3 className="text-xl font-black mb-4">{item ? 'Edit SKU' : 'New SKU'}</h3>
+                <div className="space-y-4">
+                    <input className="w-full p-3 border rounded-xl" placeholder="SKU ID" value={formData.id} onChange={e => setFormData({ ...formData, id: e.target.value })} />
+                    <input className="w-full p-3 border rounded-xl" placeholder="Product Name" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
+                    <input className="w-full p-3 border rounded-xl" type="number" placeholder="Stock" value={formData.stock} onChange={e => setFormData({ ...formData, stock: parseInt(e.target.value) })} />
+                </div>
+                <div className="flex gap-3 mt-6">
+                    <Button className="flex-1" variant="outline" onClick={onClose}>Cancel</Button>
+                    <Button className="flex-1 bg-indigo-600 text-white" onClick={() => onSave(formData)}>Save</Button>
+                </div>
+            </Card>
+        </div>
+    )
+}
+
+function SecurityModal({ onClose, onAction }: any) {
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <Card className="w-full max-w-md bg-white p-6 rounded-3xl">
+                <h3 className="text-xl font-black mb-4">Security Settings</h3>
+                <p className="text-slate-500 mb-6 font-bold">Two-Factor Authentication is currently enabled.</p>
+                <Button className="w-full bg-indigo-600 text-white" onClick={onClose}>Done</Button>
+            </Card>
+        </div>
+    )
+}
+
+function InviteModal({ onClose, onAction }: any) {
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <Card className="w-full max-w-md bg-white p-6 rounded-3xl">
+                <h3 className="text-xl font-black mb-4">Invite Team Member</h3>
+                <input className="w-full p-3 border rounded-xl mb-6" placeholder="Email Address" />
+                <div className="flex gap-3">
+                    <Button className="flex-1" variant="outline" onClick={onClose}>Cancel</Button>
+                    <Button className="flex-1 bg-indigo-600 text-white" onClick={() => { onAction("Invitation Sent"); onClose(); }}>Send Invite</Button>
+                </div>
+            </Card>
+        </div>
+    )
+}
+
+function PaymentUpdateModal({ onClose, onAction }: any) {
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <Card className="w-full max-w-md bg-white p-6 rounded-3xl">
+                <h3 className="text-xl font-black mb-4">Update Payment Method</h3>
+                <div className="p-4 bg-slate-50 rounded-xl mb-6 border border-slate-100">
+                    <p className="font-black text-slate-900">Visa ending in 4242</p>
+                    <p className="text-xs text-slate-400 font-bold">Expires 12/28</p>
+                </div>
+                <Button className="w-full bg-indigo-600 text-white" onClick={() => { onAction("Payment Method Updated"); onClose(); }}>Add New Card</Button>
+            </Card>
+        </div>
     )
 }
