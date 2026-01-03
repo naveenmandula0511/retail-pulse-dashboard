@@ -41,6 +41,15 @@ export default function DashboardPage() {
     const [notifications, setNotifications] = useState(3);
     const [toast, setToast] = useState<{ message: string, type: 'info' | 'success' } | null>(null);
 
+    // Application Data State (Lifting mock data to state for CRUD)
+    const [localInventory, setLocalInventory] = useState<InventoryItem[]>(inventoryData);
+    const [localSales, setLocalSales] = useState<SaleRecord[]>(salesData);
+    const [localRegions, setLocalRegions] = useState<RegionData[]>(regionData);
+
+    // Modal State
+    const [isAddSKUModalOpen, setIsAddSKUModalOpen] = useState(false);
+    const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+
     // Toast Timer
     useEffect(() => {
         if (toast) {
@@ -53,15 +62,15 @@ export default function DashboardPage() {
         setToast({ message, type: 'info' });
     };
 
-    // Calculate Metrics
-    const totalRevenue = salesData.reduce((acc: number, curr: SaleRecord) => acc + curr.revenue, 0);
-    const activeStores = regionData.length;
-    const stockoutRiskCount = inventoryData.filter((item: InventoryItem) => item.status !== 'In Stock').length;
+    // Calculate Metrics (Derived from state)
+    const totalRevenue = localSales.reduce((acc: number, curr: SaleRecord) => acc + curr.revenue, 0);
+    const activeStores = localRegions.length;
+    const stockoutRiskCount = localInventory.filter((item: InventoryItem) => item.status !== 'In Stock').length;
 
     // Simulated trend based on last 2 days
-    const lastDayRevenue = salesData[salesData.length - 1].revenue;
-    const prevDayRevenue = salesData[salesData.length - 2].revenue;
-    const revenueTrend = ((lastDayRevenue - prevDayRevenue) / prevDayRevenue) * 100;
+    const lastDayRevenue = localSales[localSales.length - 1]?.revenue || 0;
+    const prevDayRevenue = localSales[localSales.length - 2]?.revenue || 0;
+    const revenueTrend = prevDayRevenue ? ((lastDayRevenue - prevDayRevenue) / prevDayRevenue) * 100 : 0;
 
     return (
         <div className="flex h-screen w-full bg-slate-50">
@@ -103,16 +112,19 @@ export default function DashboardPage() {
 
                 <div className="p-6 border-t border-white/10">
                     <button
-                        onClick={() => showActionToast("Opening Profile Management...")}
-                        className="flex items-center gap-3 w-full hover:bg-white/5 p-2 rounded-xl transition-colors text-left"
+                        onClick={() => setActiveTab('Profile')}
+                        className={cn(
+                            "flex items-center gap-3 w-full p-2 rounded-xl transition-all text-left group",
+                            activeTab === 'Profile' ? "bg-white/10" : "hover:bg-white/5"
+                        )}
                     >
-                        <Avatar className="h-8 w-8">
+                        <Avatar className="h-8 w-8 border border-white/20 group-hover:border-white/40 transition-colors">
                             <AvatarImage src="https://github.com/shadcn.png" />
                             <AvatarFallback>AD</AvatarFallback>
                         </Avatar>
                         <div className="overflow-hidden">
                             <p className="text-sm font-medium truncate">Admin User</p>
-                            <p className="text-xs text-slate-400 truncate">Premium Plan</p>
+                            <p className="text-xs text-slate-400 truncate">Store Owner</p>
                         </div>
                     </button>
                 </div>
@@ -172,187 +184,475 @@ export default function DashboardPage() {
                         <h2 className="text-3xl font-bold tracking-tight text-slate-900 font-mono">
                             {activeTab === 'Overview' ? 'Command Center' :
                                 activeTab === 'Inventory Map' ? 'Regional Intelligence' :
-                                    activeTab === 'Smart Forecast' ? 'Predictive Analytics' : 'System Settings'}
+                                    activeTab === 'Smart Forecast' ? 'Predictive Analytics' :
+                                        activeTab === 'Profile' ? 'Account Authority' : 'System Settings'}
                         </h2>
                         <p className="text-slate-500 mt-1">
                             {activeTab === 'Overview' ? 'Operational status and inventory intelligence dashboard.' :
                                 activeTab === 'Inventory Map' ? 'Geospatial distribution and regional performance metrics.' :
-                                    activeTab === 'Smart Forecast' ? 'AI-powered demand projections and risk assessment.' : 'Configure your pulse preferences and system parameters.'}
+                                    activeTab === 'Smart Forecast' ? 'AI-powered demand projections and risk assessment.' :
+                                        activeTab === 'Profile' ? 'Administrative identity and security control.' : 'Configure your pulse preferences and system parameters.'}
                         </p>
                     </div>
 
-                    {/* KPI Cards Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        <KPICard
-                            title="Total Revenue"
-                            value={`$${(totalRevenue / 1000).toFixed(1)}k`}
-                            trend={`${revenueTrend > 0 ? '+' : ''}${revenueTrend.toFixed(1)}`}
-                            trendUp={revenueTrend > 0}
-                            description="Monthly aggregate"
-                        />
-                        <KPICard
-                            title="Active Stores"
-                            value={activeStores}
-                            trend="+0"
-                            trendUp={true}
-                            description="Across 4 regions"
-                        />
-                        <KPICard
-                            title="Stockout Risk"
-                            value={stockoutRiskCount}
-                            trend={stockoutRiskCount > 5 ? "High" : "Low"}
-                            trendUp={stockoutRiskCount < 5}
-                            description="Items needing attention"
-                            variant={stockoutRiskCount > 0 ? "warning" : "default"}
-                        />
-                        <KPICard
-                            title="AI Predictions"
-                            value="94.2%"
-                            trend="+2.1"
-                            trendUp={true}
-                            description="Forecast accuracy"
-                        />
-                    </div>
+                    {/* Dynamic View Rendering */}
+                    {activeTab === 'Overview' && (
+                        <>
+                            {/* KPI Cards Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                <KPICard
+                                    title="Total Revenue"
+                                    value={`$${(totalRevenue / 1000).toFixed(1)}k`}
+                                    trend={`${revenueTrend > 0 ? '+' : ''}${revenueTrend.toFixed(1)}`}
+                                    trendUp={revenueTrend > 0}
+                                    description="Monthly aggregate"
+                                />
+                                <KPICard
+                                    title="Active Stores"
+                                    value={activeStores}
+                                    trend="+0"
+                                    trendUp={true}
+                                    description="Across 4 regions"
+                                />
+                                <KPICard
+                                    title="Stockout Risk"
+                                    value={stockoutRiskCount}
+                                    trend={stockoutRiskCount > 5 ? "High" : "Low"}
+                                    trendUp={stockoutRiskCount < 5}
+                                    description="Items needing attention"
+                                    variant={stockoutRiskCount > 0 ? "warning" : "default"}
+                                />
+                                <KPICard
+                                    title="Customer Satisfaction"
+                                    value="94.2%"
+                                    trend="+2.1"
+                                    trendUp={true}
+                                    description="Forecast accuracy"
+                                />
+                            </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        {/* Performance Chart - Takes 2 columns */}
-                        <div className="lg:col-span-2">
-                            <Card className="border-slate-200 shadow-sm overflow-hidden h-full">
-                                <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 bg-slate-50/50">
-                                    <div>
-                                        <CardTitle className="text-lg font-bold text-slate-900">Performance Analytics</CardTitle>
-                                        <p className="text-sm text-slate-500">Revenue vs. Profit trends (Last 30 Days)</p>
-                                    </div>
-                                    <div className="flex items-center gap-6">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
-                                            <span className="text-xs font-semibold text-slate-600 uppercase tracking-tight">Revenue</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                                            <span className="text-xs font-semibold text-slate-600 uppercase tracking-tight">Profit</span>
-                                        </div>
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="pt-6">
-                                    <PerformanceChart data={salesData} />
-                                </CardContent>
-                            </Card>
-                        </div>
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                {/* Performance Chart - Takes 2 columns */}
+                                <div className="lg:col-span-2">
+                                    <Card className="border-slate-200 shadow-sm overflow-hidden h-full">
+                                        <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 bg-slate-50/50">
+                                            <div>
+                                                <CardTitle className="text-lg font-bold text-slate-900">Performance Analytics</CardTitle>
+                                                <p className="text-sm text-slate-500">Revenue vs. Profit trends (Last 30 Days)</p>
+                                            </div>
+                                            <div className="flex items-center gap-6">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
+                                                    <span className="text-xs font-semibold text-slate-600 uppercase tracking-tight">Revenue</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                                                    <span className="text-xs font-semibold text-slate-600 uppercase tracking-tight">Profit</span>
+                                                </div>
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent className="pt-6">
+                                            <PerformanceChart data={localSales} />
+                                        </CardContent>
+                                    </Card>
+                                </div>
 
-                        {/* Extraordinary Feature: AI Smart Insights Hub */}
-                        <div className="lg:col-span-1">
-                            <SmartInsightHub
-                                inventory={inventoryData}
-                                sales={salesData}
-                                onAction={showActionToast}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Inventory Intelligence Section */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-8">
-                        {/* Inventory Intelligence Table - 2 Columns */}
-                        <div className="lg:col-span-2">
-                            <Card className="border-slate-200 shadow-sm overflow-hidden h-full">
-                                <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 bg-slate-50/50">
-                                    <div>
-                                        <CardTitle className="text-lg font-bold text-slate-900">Inventory Intelligence</CardTitle>
-                                        <p className="text-sm text-slate-500">Real-time stock status across top SKUs</p>
-                                    </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="text-indigo-600 font-bold"
-                                        onClick={() => showActionToast("Generating Full Inventory Report...")}
-                                    >
-                                        Full Report
-                                    </Button>
-                                </CardHeader>
-                                <CardContent className="p-0">
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-left border-collapse">
-                                            <thead>
-                                                <tr className="bg-slate-50/50 border-b border-slate-100">
-                                                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-400">Product</th>
-                                                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-400">SKU</th>
-                                                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-400">Level</th>
-                                                    <th className="px-6 py-4 text-xs font-bold uppercase tracking-wider text-slate-400">Status</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100">
-                                                {inventoryData.slice(0, 5).map((item: InventoryItem) => (
-                                                    <tr key={item.id} className="hover:bg-slate-50/50 transition-colors group">
-                                                        <td className="px-6 py-4">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
-                                                                    <Package size={14} />
-                                                                </div>
-                                                                <span className="text-sm font-bold text-slate-900">{item.name}</span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-6 py-4 text-sm font-mono text-slate-500">{item.id}</td>
-                                                        <td className="px-6 py-4">
-                                                            <div className="flex items-center gap-3 min-w-[100px]">
-                                                                <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                                                    <div
-                                                                        className={cn(
-                                                                            "h-full rounded-full",
-                                                                            item.status === 'Critical' ? "bg-rose-500" :
-                                                                                item.status === 'Low Stock' ? "bg-amber-500" : "bg-emerald-500"
-                                                                        )}
-                                                                        style={{ width: `${Math.max(item.stock, 5)}%` }}
-                                                                    />
-                                                                </div>
-                                                                <span className="text-xs font-bold text-slate-600">{item.stock}</span>
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-6 py-4">
-                                                            <Badge
-                                                                variant={item.status === 'Critical' ? 'destructive' : item.status === 'Low Stock' ? 'secondary' : 'default'}
-                                                                className={cn(
-                                                                    "text-[10px] font-bold uppercase tracking-widest px-2 py-0.5",
-                                                                    item.status === 'Low Stock' && "bg-amber-100 text-amber-700 hover:bg-amber-100 border-amber-200",
-                                                                    item.status === 'In Stock' && "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-emerald-200"
-                                                                )}
-                                                            >
-                                                                {item.status}
-                                                            </Badge>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
-
-                        {/* Geospatial Map - 1 Column */}
-                        <div className="lg:col-span-1">
-                            <Card className="border-slate-200 shadow-sm overflow-hidden h-full">
-                                <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 bg-slate-50/50">
-                                    <div>
-                                        <CardTitle className="text-lg font-bold text-slate-900">Regional Pulse</CardTitle>
-                                        <p className="text-sm text-slate-500">Revenue distribution map</p>
-                                    </div>
-                                    <Map className="w-5 h-5 text-slate-400" />
-                                </CardHeader>
-                                <CardContent className="pt-6 relative">
-                                    <InventoryMap
-                                        regions={regionData}
+                                {/* AI Smart Insights Hub */}
+                                <div className="lg:col-span-1">
+                                    <SmartInsightHub
+                                        inventory={localInventory}
+                                        sales={localSales}
                                         onAction={showActionToast}
                                     />
+                                </div>
+                            </div>
+
+                            {/* Inventory Intelligence Table */}
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-8">
+                                <div className="lg:col-span-3">
+                                    <Card className="border-slate-200 shadow-sm overflow-hidden h-full">
+                                        <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 bg-slate-50/50">
+                                            <div className="flex items-center gap-4">
+                                                <div>
+                                                    <CardTitle className="text-lg font-bold text-slate-900">Inventory Intelligence</CardTitle>
+                                                    <p className="text-sm text-slate-500">Manage real-time stock and product information</p>
+                                                </div>
+                                                <Button
+                                                    onClick={() => {
+                                                        setEditingItem(null);
+                                                        setIsAddSKUModalOpen(true);
+                                                    }}
+                                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-9 px-4 rounded-lg shadow-lg shadow-indigo-200 transition-all active:scale-95"
+                                                >
+                                                    <Package className="w-4 h-4 mr-2" />
+                                                    Add New SKU
+                                                </Button>
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent className="p-0">
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-left border-collapse">
+                                                    <thead>
+                                                        <tr className="bg-slate-50 border-b border-slate-100">
+                                                            <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Internal SKU</th>
+                                                            <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Product Designation</th>
+                                                            <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Stock Availability</th>
+                                                            <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-400">Current Status</th>
+                                                            <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-right">Operations</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-slate-100">
+                                                        {localInventory
+                                                            .filter(item => item.name.toLowerCase().includes(searchQuery.toLowerCase()) || item.id.toLowerCase().includes(searchQuery.toLowerCase()))
+                                                            .map((item) => (
+                                                                <tr key={item.id} className="hover:bg-indigo-50/30 transition-colors group">
+                                                                    <td className="px-6 py-4 font-mono text-xs font-bold text-slate-500">{item.id}</td>
+                                                                    <td className="px-6 py-4">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <div className="w-2 h-2 rounded-full bg-slate-300 group-hover:bg-indigo-500 transition-colors" />
+                                                                            <span className="font-bold text-slate-900">{item.name}</span>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-6 py-4">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                                                                <div
+                                                                                    className={cn(
+                                                                                        "h-full rounded-full transition-all duration-1000",
+                                                                                        item.stock > 50 ? "bg-emerald-500" :
+                                                                                            item.stock > 10 ? "bg-amber-500" : "bg-rose-500"
+                                                                                    )}
+                                                                                    style={{ width: `${Math.min(item.stock, 100)}%` }}
+                                                                                />
+                                                                            </div>
+                                                                            <span className="text-xs font-bold text-slate-600 font-mono">{item.stock}</span>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-6 py-4">
+                                                                        <Badge
+                                                                            variant={
+                                                                                item.status === 'In Stock' ? 'default' :
+                                                                                    item.status === 'Low Stock' ? 'secondary' : 'destructive'
+                                                                            }
+                                                                            className="shadow-none rounded-full px-3"
+                                                                        >
+                                                                            {item.status}
+                                                                        </Badge>
+                                                                    </td>
+                                                                    <td className="px-6 py-4 text-right">
+                                                                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-white"
+                                                                                onClick={() => {
+                                                                                    setEditingItem(item);
+                                                                                    setIsAddSKUModalOpen(true);
+                                                                                }}
+                                                                            >
+                                                                                <Settings className="w-4 h-4" />
+                                                                            </Button>
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                className="h-8 w-8 text-slate-400 hover:text-rose-600 hover:bg-white"
+                                                                                onClick={() => {
+                                                                                    setLocalInventory(prev => prev.filter(i => i.id !== item.id));
+                                                                                    showActionToast(`Successfully removed ${item.name} from inventory.`);
+                                                                                }}
+                                                                            >
+                                                                                <AlertTriangle className="w-4 h-4" />
+                                                                            </Button>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {activeTab === 'Inventory Map' && (
+                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <Card className="border-slate-200 shadow-xl overflow-hidden min-h-[500px] flex flex-col">
+                                <CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 bg-slate-50/50 p-8">
+                                    <div>
+                                        <CardTitle className="text-2xl font-bold">Regional Distribution Map</CardTitle>
+                                        <p className="text-sm text-slate-500 font-medium">Geospatial revenue and inventory density analysis</p>
+                                    </div>
+                                    <Map className="w-8 h-8 text-indigo-500" />
+                                </CardHeader>
+                                <CardContent className="flex-1 flex items-center justify-center p-0 relative bg-slate-50">
+                                    <div className="w-full h-full max-w-4xl p-12">
+                                        <InventoryMap
+                                            regions={localRegions}
+                                            onAction={showActionToast}
+                                        />
+                                    </div>
                                 </CardContent>
                             </Card>
                         </div>
-                    </div>
+                    )}
+
+                    {activeTab === 'Smart Forecast' && (
+                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <Card className="border-slate-200 shadow-xl overflow-hidden p-8 bg-indigo-900 text-white relative">
+                                <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 blur-[120px] -mr-48 -mt-48" />
+                                <div className="flex flex-col md:flex-row items-center gap-12 relative z-10">
+                                    <div className="flex-1 space-y-6">
+                                        <div className="flex items-center gap-3">
+                                            <Sparkles className="w-10 h-10 text-amber-400" />
+                                            <h2 className="text-4xl font-bold tracking-tight">AI Demand Projections</h2>
+                                        </div>
+                                        <p className="text-xl text-indigo-100 leading-relaxed font-medium">
+                                            Our Pulse AI models have processed the last 30 days of sales data and predicted a
+                                            <span className="text-white font-bold mx-2 px-2 py-1 bg-white/10 rounded-lg">12.4% increase</span>
+                                            in revenue for the upcoming Q1 retail window.
+                                        </p>
+                                        <div className="grid grid-cols-2 gap-6 pt-4">
+                                            <div className="bg-white/10 p-6 rounded-3xl border border-white/10 backdrop-blur-md">
+                                                <p className="text-xs font-bold uppercase tracking-widest text-indigo-300 mb-2">Confidence Score</p>
+                                                <p className="text-3xl font-bold font-mono text-emerald-400">98.2%</p>
+                                            </div>
+                                            <div className="bg-white/10 p-6 rounded-3xl border border-white/10 backdrop-blur-md">
+                                                <p className="text-xs font-bold uppercase tracking-widest text-indigo-300 mb-2">Target Growth</p>
+                                                <p className="text-3xl font-bold font-mono text-white">+$142k</p>
+                                            </div>
+                                        </div>
+                                        <Button className="w-full bg-white text-indigo-900 hover:bg-indigo-50 font-bold py-8 text-xl rounded-2xl shadow-2xl transition-all active:scale-95 mt-4">
+                                            Generate Full AI Prediction Model
+                                        </Button>
+                                    </div>
+                                    <div className="w-full md:w-96 aspect-square bg-white/5 rounded-full border border-indigo-400/20 flex items-center justify-center relative overflow-hidden group">
+                                        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 to-transparent animate-pulse" />
+                                        <BrainCircuit className="w-56 h-56 text-indigo-300 relative z-10 transition-transform duration-700 group-hover:scale-110" />
+                                    </div>
+                                </div>
+                            </Card>
+                        </div>
+                    )}
+
+                    {activeTab === 'Settings' && (
+                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <div className="flex items-center justify-between mb-4">
+                                <div>
+                                    <h3 className="text-2xl font-bold text-slate-900">System Preferences</h3>
+                                    <p className="text-slate-500">Configure your dashboard environment and security</p>
+                                </div>
+                                <Button className="bg-slate-900 text-white font-bold rounded-xl px-6">Save Changes</Button>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <Card className="border-slate-200 shadow-sm rounded-3xl overflow-hidden">
+                                    <CardHeader className="bg-slate-50 border-b border-slate-100 p-6">
+                                        <CardTitle className="text-lg font-bold flex items-center gap-2">
+                                            <Zap className="w-5 h-5 text-indigo-500" />
+                                            Interface Options
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="p-8 space-y-6">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="font-bold text-slate-900">Dark Mode (Experimental)</p>
+                                                <p className="text-sm text-slate-500">Enable high-performance dark theme</p>
+                                            </div>
+                                            <div className="w-14 h-7 bg-slate-200 rounded-full relative p-1 cursor-not-allowed">
+                                                <div className="w-5 h-5 bg-white rounded-full shadow-md" />
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="font-bold text-slate-900">Push Notifications</p>
+                                                <p className="text-sm text-slate-500">Browser alerts for critical stockouts</p>
+                                            </div>
+                                            <div className="w-14 h-7 bg-indigo-600 rounded-full relative p-1 cursor-pointer">
+                                                <div className="w-5 h-5 bg-white rounded-full shadow-md translate-x-7" />
+                                            </div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                                <Card className="border-slate-200 shadow-sm rounded-3xl overflow-hidden">
+                                    <CardHeader className="bg-slate-50 border-b border-slate-100 p-6">
+                                        <CardTitle className="text-lg font-bold flex items-center gap-2">
+                                            <Zap className="w-5 h-5 text-indigo-500" />
+                                            Security & Verification
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="p-8 space-y-6">
+                                        <Button variant="outline" className="w-full justify-start h-14 rounded-2xl border-slate-200 hover:bg-slate-50 transition-colors font-bold text-slate-700">
+                                            <ArrowUpRight className="w-4 h-4 mr-3 text-indigo-500" />
+                                            Two-Factor Authentication (2FA)
+                                        </Button>
+                                        <Button variant="outline" className="w-full justify-start h-14 rounded-2xl border-slate-200 hover:bg-slate-50 transition-colors font-bold text-slate-700">
+                                            <Bell className="w-4 h-4 mr-3 text-indigo-500" />
+                                            Manage Security Keys
+                                        </Button>
+                                    </CardContent>
+                                </Card>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'Profile' && (
+                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <Card className="border-slate-200 shadow-2xl overflow-hidden max-w-3xl rounded-3xl bg-white">
+                                <div className="h-40 bg-gradient-to-r from-indigo-600 to-indigo-900 relative">
+                                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20" />
+                                    <div className="absolute -bottom-16 left-12 flex items-end gap-6">
+                                        <Avatar className="h-32 w-32 border-8 border-white shadow-2xl rounded-3xl">
+                                            <AvatarImage src="https://github.com/shadcn.png" />
+                                            <AvatarFallback className="text-3xl font-bold bg-slate-900 text-white">AD</AvatarFallback>
+                                        </Avatar>
+                                        <div className="mb-4">
+                                            <h2 className="text-3xl font-extrabold text-white drop-shadow-lg">Admin Management</h2>
+                                            <p className="text-indigo-100 font-bold opacity-80 uppercase tracking-widest text-xs">RetailPulse Platform Owner</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <CardContent className="pt-24 px-12 pb-12">
+                                    <div className="flex justify-between items-start mb-12">
+                                        <div>
+                                            <p className="text-slate-500 font-medium mb-1">Authenticated Account Access</p>
+                                            <div className="flex items-center gap-2">
+                                                <Badge className="bg-emerald-50 text-emerald-700 border-emerald-100 font-bold uppercase tracking-tighter shadow-none">Live Status: Verified</Badge>
+                                                <Badge variant="outline" className="font-bold border-slate-200">Owner Access</Badge>
+                                            </div>
+                                        </div>
+                                        <Button className="rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-12 px-8 shadow-xl shadow-indigo-100 transition-all">
+                                            Edit Secure Profile
+                                        </Button>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        <div className="space-y-3">
+                                            <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Primary Email Address</label>
+                                            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold text-slate-600 flex items-center justify-between">
+                                                admin@retailpulse.ai
+                                                <Settings className="w-4 h-4 opacity-30" />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Total Store Capacity</label>
+                                            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold text-slate-600">
+                                                10,000 Product SKUs
+                                            </div>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Account Password</label>
+                                            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 font-bold text-slate-600 flex items-center justify-between">
+                                                ••••••••••••••••
+                                                <Button variant="ghost" className="h-auto p-0 text-indigo-600 font-bold text-xs uppercase tracking-widest">Change</Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="mt-16 pt-8 border-t border-slate-100 flex items-center justify-between">
+                                        <div className="flex gap-4">
+                                            <Button className="bg-rose-50 text-rose-600 hover:bg-rose-100 border-none font-bold rounded-xl h-12 px-6">Log Out From Terminal</Button>
+                                            <Button variant="ghost" className="text-slate-400 font-bold hover:text-slate-600 rounded-xl h-12 px-6">Deactivate Store</Button>
+                                        </div>
+                                        <div className="text-[10px] font-bold text-slate-300 uppercase">Version 2.4.0 Alpha Build</div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    )}
                 </div>
             </main>
 
+            {/* SKU Management Modal (Add/Edit) */}
+            {isAddSKUModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300 p-4">
+                    <Card className="w-full max-w-md border-none shadow-2xl rounded-3xl overflow-hidden scale-in-center transition-transform">
+                        <CardHeader className="bg-slate-950 text-white p-8">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle className="text-2xl font-bold">{editingItem ? 'Update Secure SKU' : 'Register New SKU'}</CardTitle>
+                                    <p className="text-slate-400 text-sm mt-1">{editingItem ? 'Modify existing inventory parameters' : 'Onboard new product to Pulse network'}</p>
+                                </div>
+                                <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center">
+                                    <Cpu className="w-6 h-6 text-indigo-400" />
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-8 bg-white space-y-6">
+                            <form
+                                onSubmit={(e) => {
+                                    e.preventDefault();
+                                    const formData = new FormData(e.currentTarget);
+                                    const name = formData.get('name') as string;
+                                    const stock = parseInt(formData.get('stock') as string);
+                                    const status = stock === 0 ? 'Critical' : stock < 15 ? 'Low Stock' : 'In Stock';
+
+                                    if (editingItem) {
+                                        setLocalInventory(prev => prev.map(item => item.id === editingItem.id ? { ...item, name, stock, status } : item));
+                                        showActionToast(`Successfully updated ${name}`);
+                                    } else {
+                                        const newSKUIntoState: InventoryItem = {
+                                            id: `SKU-${Math.floor(Math.random() * 1000 + 100).toString()}`,
+                                            name,
+                                            stock,
+                                            status
+                                        };
+                                        setLocalInventory(prev => [newSKUIntoState, ...prev]);
+                                        showActionToast(`Added new product: ${name}`);
+                                    }
+                                    setIsAddSKUModalOpen(false);
+                                    setEditingItem(null);
+                                }}
+                                className="space-y-6"
+                            >
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Product Full Name</label>
+                                    <input
+                                        name="name"
+                                        required
+                                        defaultValue={editingItem?.name}
+                                        placeholder="e.g. Next-Gen Gaming Mouse"
+                                        className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Initial Stock Quantity</label>
+                                    <input
+                                        name="stock"
+                                        type="number"
+                                        required
+                                        defaultValue={editingItem?.stock}
+                                        placeholder="Units available"
+                                        className="w-full h-12 bg-slate-50 border border-slate-100 rounded-2xl px-4 font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none"
+                                    />
+                                </div>
+                                <div className="flex gap-4 pt-4">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        onClick={() => {
+                                            setIsAddSKUModalOpen(false);
+                                            setEditingItem(null);
+                                        }}
+                                        className="flex-1 h-12 rounded-2xl font-bold text-slate-500"
+                                    >
+                                        Dismiss
+                                    </Button>
+                                    <Button
+                                        type="submit"
+                                        className="flex-1 h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-xl shadow-indigo-100 transition-all active:scale-95"
+                                    >
+                                        Execute Action
+                                    </Button>
+                                </div>
+                            </form>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
+
             {/* Global Interaction Toast */}
             {toast && (
-                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[150] animate-in fade-in slide-in-from-bottom-4 duration-300">
                     <div className="bg-slate-900 text-white px-6 py-3 rounded-2xl shadow-2xl border border-white/10 flex items-center gap-3">
                         <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
                         <span className="text-sm font-bold tracking-tight">{toast.message}</span>
@@ -372,24 +672,19 @@ function InventoryMap({
 }) {
     const width = 400
     const height = 300
-
-    // Simple projection for the demonstration (fitting regions into the box)
     const maxRev = Math.max(...regions.map(r => r.revenue))
 
     return (
         <div className="w-full flex items-center justify-center p-4">
             <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible">
-                {/* Simplified Map Paths (Abstract) */}
                 <path
                     d="M50,100 Q150,50 350,100 T300,250 T50,200 Z"
-                    fill="#f8fafc"
-                    stroke="#e2e8f0"
+                    fill="#f1f5f9"
+                    stroke="#cbd5e1"
                     strokeWidth="2"
                 />
 
                 {regions.map((region, i) => {
-                    // Logic to position buttons based on region name as a proxy for coordinates 
-                    // since we are using an abstract map.
                     let x = 200, y = 150;
                     if (region.region === 'North') { x = 200; y = 80; }
                     if (region.region === 'South') { x = 200; y = 220; }
@@ -426,24 +721,6 @@ function InventoryMap({
                             >
                                 {region.region} (${(region.revenue / 1000).toFixed(0)}k)
                             </text>
-
-                            {/* Hover Tooltip Placeholder */}
-                            <rect
-                                x={x - 40}
-                                y={y - radius - 35}
-                                width="80"
-                                height="25"
-                                rx="6"
-                                className="fill-slate-900 opacity-0 group-hover/node:opacity-100 transition-opacity pointer-events-none"
-                            />
-                            <text
-                                x={x}
-                                y={y - radius - 18}
-                                textAnchor="middle"
-                                className="text-[9px] font-bold fill-white opacity-0 group-hover/node:opacity-100 transition-opacity pointer-events-none"
-                            >
-                                Market Leader
-                            </text>
                         </g>
                     )
                 })}
@@ -462,7 +739,6 @@ function PerformanceChart({ data }: { data: SaleRecord[] }) {
     const chartHeight = height - padding * 2
     const chartWidth = width - padding * 2
 
-    // Helper to map data to SVG coordinates
     const getPoints = (key: 'revenue' | 'profit') => {
         return data.map((d: SaleRecord, i: number) => {
             const x = padding + (i / (data.length - 1)) * chartWidth
@@ -473,8 +749,6 @@ function PerformanceChart({ data }: { data: SaleRecord[] }) {
 
     const revenuePoints = getPoints('revenue')
     const profitPoints = getPoints('profit')
-
-    // Create a smooth area under the revenue line
     const revenueAreaPoints = `${revenuePoints} ${padding + chartWidth},${height - padding} ${padding},${height - padding}`
 
     const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -499,7 +773,13 @@ function PerformanceChart({ data }: { data: SaleRecord[] }) {
                 onMouseMove={handleMouseMove}
                 onMouseLeave={() => setHoverIndex(null)}
             >
-                {/* Horizontal Grid lines */}
+                <defs>
+                    <linearGradient id="revGrad" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stopColor="#6366f1" stopOpacity="0.15" />
+                        <stop offset="100%" stopColor="#6366f1" stopOpacity="0.01" />
+                    </linearGradient>
+                </defs>
+
                 {[0, 0.25, 0.5, 0.75, 1].map((p, i) => (
                     <g key={i}>
                         <line
@@ -521,43 +801,14 @@ function PerformanceChart({ data }: { data: SaleRecord[] }) {
                     </g>
                 ))}
 
-                {/* Vertical Date Labels */}
-                {data.filter((_, i: number) => i % 5 === 0).map((d: SaleRecord, i: number) => {
-                    const x = padding + (data.indexOf(d) / (data.length - 1)) * chartWidth
-                    return (
-                        <text
-                            key={i}
-                            x={x}
-                            y={height - padding + 24}
-                            textAnchor="middle"
-                            className="text-[10px] fill-slate-400 font-bold uppercase tracking-wider"
-                        >
-                            {d.date.split('-').slice(1).join('/')}
-                        </text>
-                    )
-                })}
-
-                {/* Areas with Gradients */}
-                <defs>
-                    <linearGradient id="revenueGradient" x1="0" x2="0" y1="0" y2="1">
-                        <stop offset="0%" stopColor="#6366f1" stopOpacity="0.15" />
-                        <stop offset="100%" stopColor="#6366f1" stopOpacity="0.01" />
-                    </linearGradient>
-                </defs>
-                <polygon
-                    points={revenueAreaPoints}
-                    fill="url(#revenueGradient)"
-                />
-
-                {/* Main Lines */}
+                <polygon points={revenueAreaPoints} fill="url(#revGrad)" />
                 <polyline
                     fill="none"
                     stroke="#6366f1"
-                    strokeWidth="3.5"
+                    strokeWidth="4"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     points={revenuePoints}
-                    className="drop-shadow-[0_4px_6px_rgba(99,102,241,0.2)]"
                 />
                 <polyline
                     fill="none"
@@ -566,10 +817,9 @@ function PerformanceChart({ data }: { data: SaleRecord[] }) {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     points={profitPoints}
-                    className="opacity-80"
+                    className="opacity-70"
                 />
 
-                {/* Interaction Overlay */}
                 {hoverIndex !== null && (
                     <g>
                         <line
@@ -589,44 +839,11 @@ function PerformanceChart({ data }: { data: SaleRecord[] }) {
                             stroke="white"
                             strokeWidth="3"
                         />
-                        <circle
-                            cx={padding + (hoverIndex / (data.length - 1)) * chartWidth}
-                            cy={height - padding - (data[hoverIndex].profit / maxRevenue) * chartHeight}
-                            r="6"
-                            fill="#10b981"
-                            stroke="white"
-                            strokeWidth="3"
-                        />
-
-                        {/* Tooltip Box */}
                         <g transform={`translate(${padding + (hoverIndex / (data.length - 1)) * chartWidth + (hoverIndex > data.length / 2 ? -160 : 20)}, ${height / 2 - 40})`}>
-                            <rect width="140" height="80" rx="12" className="fill-slate-900 shadow-2xl" />
+                            <rect width="140" height="60" rx="12" className="fill-slate-900 shadow-2xl" />
                             <text x="15" y="25" className="fill-slate-400 text-[10px] font-bold uppercase tracking-wider">{data[hoverIndex].date}</text>
-                            <text x="15" y="45" className="fill-white text-xs font-bold">Rev: ${(data[hoverIndex].revenue / 1000).toFixed(1)}k</text>
-                            <text x="15" y="65" className="fill-emerald-400 text-xs font-bold">Profit: ${(data[hoverIndex].profit / 1000).toFixed(1)}k</text>
+                            <text x="15" y="45" className="fill-white text-xs font-bold">Revenue: ${(data[hoverIndex].revenue / 1000).toFixed(1)}k</text>
                         </g>
-                    </g>
-                )}
-
-                {/* Last Data Point Indicators (Static if not hovering) */}
-                {hoverIndex === null && (
-                    <g className="animate-pulse">
-                        <circle
-                            cx={padding + chartWidth}
-                            cy={height - padding - (data[data.length - 1].revenue / maxRevenue) * chartHeight}
-                            r="5"
-                            fill="#6366f1"
-                            stroke="white"
-                            strokeWidth="2"
-                        />
-                        <circle
-                            cx={padding + chartWidth}
-                            cy={height - padding - (data[data.length - 1].profit / maxRevenue) * chartHeight}
-                            r="5"
-                            fill="#10b981"
-                            stroke="white"
-                            strokeWidth="2"
-                        />
                     </g>
                 )}
             </svg>
@@ -644,92 +861,51 @@ function SmartInsightHub({
     onAction: (msg: string) => void
 }) {
     const criticalItems = inventory.filter(item => item.status === 'Critical')
-    const lowStockItems = inventory.filter(item => item.status === 'Low Stock')
 
     return (
-        <Card className="border-none bg-slate-950 text-white overflow-hidden h-full relative group">
-            {/* Animated Background Glow */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 blur-[100px] -mr-32 -mt-32 pointer-events-none group-hover:bg-indigo-500/30 transition-colors duration-500" />
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-500/10 blur-[100px] -ml-32 -mb-32 pointer-events-none" />
-
-            <CardHeader className="relative z-10 border-b border-white/10 pb-4">
+        <Card className="border-none bg-slate-950 text-white overflow-hidden h-full relative group shadow-2xl">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 blur-[100px] pointer-events-none" />
+            <CardHeader className="relative z-10 border-b border-white/5 pb-4">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center border border-indigo-500/50">
-                            <Sparkles className="w-4 h-4 text-indigo-400" />
-                        </div>
+                        <Sparkles className="w-5 h-5 text-indigo-400" />
                         <CardTitle className="text-lg font-bold">Pulse AI Hub</CardTitle>
                     </div>
-                    <Badge variant="outline" className="bg-indigo-500/10 text-indigo-400 border-indigo-500/30 text-[10px] uppercase font-bold tracking-widest animate-pulse">
-                        Neural Scan Active
-                    </Badge>
                 </div>
             </CardHeader>
-
             <CardContent className="relative z-10 p-6 space-y-6">
-                {/* AI Demand Prediction */}
-                <div className="space-y-3">
-                    <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest text-slate-400">
-                        <span>Neural Forecast</span>
-                        <span className="text-indigo-400">Tomorrow @ 09:00</span>
-                    </div>
-                    <div className="p-4 rounded-xl bg-white/5 border border-white/10 backdrop-blur-md hover:bg-white/10 transition-colors cursor-pointer">
+                <div className="space-y-4">
+                    <div className="p-4 rounded-2xl bg-white/5 border border-white/10">
                         <div className="flex items-center gap-3 mb-2">
                             <BrainCircuit className="w-5 h-5 text-indigo-400" />
-                            <span className="text-sm font-bold">Demand Surge Detected</span>
+                            <span className="text-sm font-bold">Neural Demand Scan</span>
                         </div>
-                        <p className="text-xs text-slate-400 leading-relaxed">
-                            AI models suggest a <span className="text-white font-bold">22.4% spike</span> in Smart Watch sales for the North region based on social sentiment logs.
+                        <p className="text-xs text-slate-400">
+                            Higher velocity detected in <span className="text-white font-bold underline">West Region</span> for Home Electronics.
                         </p>
                     </div>
-                </div>
 
-                {/* Critical Alerts */}
-                <div className="space-y-3">
-                    <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400">Operations Alerts</h4>
-                    <div className="space-y-2">
-                        {criticalItems.map((item, i) => (
-                            <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 group/alert cursor-pointer">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-                                    <div>
-                                        <p className="text-xs font-bold text-white uppercase">{item.name}</p>
-                                        <p className="text-[10px] text-rose-400 font-medium">Revenue Leak: -$4.2k/day</p>
-                                    </div>
+                    <div className="space-y-3">
+                        <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Critical Response</h4>
+                        {criticalItems.slice(0, 2).map((item, i) => (
+                            <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-rose-500/10 border border-rose-500/20">
+                                <div>
+                                    <p className="text-xs font-bold text-white mb-0.5">{item.name}</p>
+                                    <p className="text-[10px] text-rose-400">Out of Stock - Urgent</p>
                                 </div>
-                                <ChevronRight className="w-4 h-4 text-rose-500 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0" />
-                            </div>
-                        ))}
-                        {lowStockItems.slice(0, 1).map((item, i) => (
-                            <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 group/alert cursor-pointer">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-2 h-2 rounded-full bg-amber-500" />
-                                    <div>
-                                        <p className="text-xs font-bold text-white uppercase">{item.name}</p>
-                                        <p className="text-[10px] text-amber-400 font-medium">Predicted stockout in 48h</p>
-                                    </div>
-                                </div>
-                                <ChevronRight className="w-4 h-4 text-amber-500 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0" />
+                                <Activity className="w-4 h-4 text-rose-500" />
                             </div>
                         ))}
                     </div>
                 </div>
-
-                <div className="pt-2">
-                    <button
-                        onClick={() => onAction("Opening Pulse AI Chat...")}
-                        className="w-full flex items-center gap-2 p-3 rounded-xl bg-indigo-500/20 border border-indigo-500/50 cursor-pointer group/prompt hover:bg-indigo-500/30 transition-all text-left"
-                    >
-                        <MessageSquare className="w-4 h-4 text-indigo-400" />
-                        <span className="text-xs font-semibold text-indigo-300">Ask Pulse AI for a strategy...</span>
-                    </button>
-                </div>
+                <button
+                    onClick={() => onAction("Activating AI Strategy Advisor...")}
+                    className="w-full flex items-center justify-between p-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 transition-all font-bold group/btn"
+                >
+                    <span className="text-sm">Ask Advisor</span>
+                    <ChevronRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+                </button>
             </CardContent>
-
-            {/* Bottom Graphic Decoration */}
-            <div className="absolute bottom-0 right-0 p-2 opacity-10">
-                <BrainCircuit size={80} className="text-indigo-400" />
-            </div>
         </Card>
     )
 }
@@ -747,14 +923,13 @@ function NavItem({
 }) {
     return (
         <button
-            onClick={(e: React.MouseEvent) => {
-                e.preventDefault();
-                onClick?.();
-            }}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${active
-                ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/20"
-                : "text-slate-400 hover:text-white hover:bg-white/5"
-                }`}
+            onClick={onClick}
+            className={cn(
+                "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all",
+                active
+                    ? "bg-white/10 text-white shadow-xl shadow-black/20"
+                    : "text-slate-400 hover:text-white hover:bg-white/5"
+            )}
         >
             {React.cloneElement(icon as React.ReactElement, { size: 18 })}
             {label}
@@ -778,31 +953,23 @@ function KPICard({
     variant?: "default" | "warning" | "danger"
 }) {
     return (
-        <Card className="border-slate-200 shadow-sm hover:shadow-md transition-shadow cursor-default overflow-hidden relative group">
+        <Card className="border-slate-200 shadow-sm relative group overflow-hidden">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-slate-500 uppercase tracking-wider">{title}</CardTitle>
-                <MoreVertical className="w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
+                <CardTitle className="text-xs font-bold text-slate-400 uppercase tracking-widest">{title}</CardTitle>
+                <div className={cn(
+                    "text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1",
+                    trendUp ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+                )}>
+                    {trendUp ? <ArrowUpRight size={10} /> : <ArrowDownRight size={10} />}
+                    {trend}%
+                </div>
             </CardHeader>
             <CardContent>
-                <div className={cn(
-                    "text-3xl font-bold tracking-tight",
-                    variant === "warning" && value !== 0 ? "text-amber-600" : "text-slate-900"
-                )}>
-                    {value}
-                </div>
-                <div className="flex items-center gap-2 mt-2">
-                    <div className={cn(
-                        "flex items-center text-xs font-bold",
-                        trendUp ? "text-emerald-500" : "text-rose-500"
-                    )}>
-                        {trendUp ? <ArrowUpRight className="w-3 h-3 mr-0.5" /> : <ArrowDownRight className="w-3 h-3 mr-0.5" />}
-                        {trend}%
-                    </div>
-                    <p className="text-[11px] text-slate-400 font-medium truncate">{description}</p>
-                </div>
+                <div className="text-2xl font-extrabold text-slate-900 mb-1">{value}</div>
+                <p className="text-[10px] text-slate-500 font-medium">{description}</p>
             </CardContent>
-            {variant === "warning" && value !== 0 && (
-                <div className="absolute top-0 left-0 w-1 h-full bg-amber-500" />
+            {variant === 'warning' && (
+                <div className="absolute bottom-0 left-0 w-full h-1 bg-amber-500" />
             )}
         </Card>
     )
